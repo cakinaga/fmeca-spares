@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fmeca-spares"
+version = "0.3.0"
+description = "Modelo de decisão para estoque de spare parts na Engenharia Clínica, baseado em FMECA e Downtime Cost"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [{ name = "Chiara Y. H. Akinaga" }]
+keywords = [
+    "engenharia clínica",
+    "FMECA",
+    "downtime cost",
+    "spare parts",
+    "gestão de estoque",
+    "engenharia biomédica",
+    "ventilador pulmonar",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Healthcare Industry",
+    "Intended Audience :: Science/Research",
+    "Natural Language :: Portuguese (Brazilian)",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering",
+]
+dependencies = ["openpyxl>=3.1"]
+
+[project.optional-dependencies]
+app = ["streamlit>=1.32,<2", "altair>=5.0,<6", "pandas>=2.0"]
+dev = ["pytest>=8.0"]
+
+[tool.setuptools]
+packages = ["fmeca_spares"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
