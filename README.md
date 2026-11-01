@@ -1,5 +1,8 @@
 # fmeca-spares
 
+**Interface online:** <https://fmeca-spares.streamlit.app> — abre no navegador,
+sem instalação, com o estudo de caso de demonstração carregado.
+
 Modelo de decisão para estoque de peças de reposição na Engenharia Clínica,
 baseado em FMECA e Downtime Cost. Implementa a **Etapa 2** da estrutura
 metodológica: a decisão de estoque componente a componente, a partir do
