@@ -238,8 +238,8 @@ Duas abas obrigatórias.
 
 **«Modos de falha»** — uma linha por modo, com `ID` (do componente),
 `Sub ID`, `Componente`, `Subsistema`, `Modo de falha`, `Causa`, os três campos
-de efeito, `Detecção atual`, `Família de problema (FDA/IMDRF)` e as notas
-`O`, `S`, `D` com `RPN` e `Criticidade`.
+de efeito, `Detecção atual` e as notas `O`, `S`, `D` com `RPN` e
+`Criticidade`.
 
 As colunas são localizadas pelo texto do cabeçalho, não pela posição: inserir
 ou remover uma coluna não quebra a leitura. A Criticidade usada no cálculo é

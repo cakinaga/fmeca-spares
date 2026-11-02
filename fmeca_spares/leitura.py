@@ -112,7 +112,6 @@ class ModoDeFalha:
     efeito_equipamento: str | None
     efeito_paciente: str | None
     deteccao: str | None
-    familia_problema: str | None
     ocorrencia: int | None
     severidade: int | None
     deteccao_nota: int | None
@@ -289,7 +288,6 @@ _COLS_MODOS = {
     "efeito_equipamento": ("efeito no equipamento",),
     "efeito_paciente": ("efeito no paciente",),
     "deteccao": ("deteccao atual",),
-    "familia_problema": ("familia de problema", "familia"),
     "ocorrencia": ("o", "ocorrencia"),
     "severidade": ("s", "severidade"),
     "deteccao_nota": ("d", "deteccao"),
@@ -501,7 +499,6 @@ def _ler_modos(
             efeito_equipamento=_texto(_valor(linha, mapa, "efeito_equipamento")),
             efeito_paciente=_texto(_valor(linha, mapa, "efeito_paciente")),
             deteccao=_texto(_valor(linha, mapa, "deteccao")),
-            familia_problema=_texto(_valor(linha, mapa, "familia_problema")),
             ocorrencia=_inteiro(_valor(linha, mapa, "ocorrencia")),
             severidade=_inteiro(_valor(linha, mapa, "severidade")),
             deteccao_nota=_inteiro(_valor(linha, mapa, "deteccao_nota")),

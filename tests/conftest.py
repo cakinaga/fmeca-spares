@@ -38,7 +38,6 @@ CABECALHO_MODOS = [
     "Efeito no equipamento",
     "Efeito no paciente",
     "Detecção atual",
-    "Família de problema (FDA/IMDRF)",
     "O",
     "S",
     "D",
@@ -84,7 +83,7 @@ def construir_fmeca(componentes, modos, com_titulo: bool = True) -> io.BytesIO:
         wm.cell(linha, col, titulo)
     for i, dados in enumerate(modos, start=linha + 1):
         ident, sub_id, comp, sub, modo, o, s, d, rpn, crit = dados
-        valores = [ident, sub_id, comp, sub, modo, None, None, None, None, None, None, o, s, d, rpn, crit]
+        valores = [ident, sub_id, comp, sub, modo, None, None, None, None, None, o, s, d, rpn, crit]
         for col, valor in enumerate(valores, start=1):
             wm.cell(i, col, valor)
 

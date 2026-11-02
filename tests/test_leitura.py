@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import io
 
-from conftest import construir_fmeca
+from conftest import CABECALHO_MODOS, construir_fmeca
 
 from fmeca_spares import ler_fmeca
 from fmeca_spares.leitura import (
@@ -253,6 +253,11 @@ def test_estudo_de_caso_tem_lead_time_em_todos_os_componentes(fmeca_caso):
 
 # -- robustez do mapeamento de colunas -------------------------------------
 
+# posicao (1-based) das notas no formulario de teste, tirada do proprio
+# cabecalho para nao quebrar quando o layout do formulario mudar
+COL_O, COL_S, COL_D = (CABECALHO_MODOS.index(n) + 1 for n in ("O", "S", "D"))
+
+
 def _com_coluna_extra(titulo: str, antes_de: int):
     """Insere uma coluna na aba de modos, antes do indice informado (1-based)."""
     import openpyxl
@@ -278,7 +283,7 @@ def test_coluna_que_comeca_com_o_nao_rouba_a_nota_de_ocorrencia():
     coluna da Ocorrencia, que passava a ser lida como vazia — sem erro, so um
     aviso, e o componente seguia sem taxa de falha nem exposicao anual.
     """
-    fmeca = ler_fmeca(_com_coluna_extra("Observações", 12))
+    fmeca = ler_fmeca(_com_coluna_extra("Observações", COL_O))
     assert fmeca.validacao.ok
     modo = fmeca.modos[0]
     assert (modo.ocorrencia, modo.severidade, modo.deteccao_nota) == (4, 5, 3)
@@ -286,7 +291,7 @@ def test_coluna_que_comeca_com_o_nao_rouba_a_nota_de_ocorrencia():
 
 def test_colunas_que_comecam_com_s_e_d_nao_roubam_as_notas():
     for titulo in ("Situação", "Data da revisão", "Observações"):
-        fmeca = ler_fmeca(_com_coluna_extra(titulo, 12))
+        fmeca = ler_fmeca(_com_coluna_extra(titulo, COL_O))
         modo = fmeca.modos[0]
         assert (modo.ocorrencia, modo.severidade, modo.deteccao_nota) == (4, 5, 3), titulo
 
@@ -300,9 +305,9 @@ def test_cabecalho_de_nota_por_extenso_tambem_e_aceito():
     )
     wb = openpyxl.load_workbook(buffer)
     ws = wb["Modos de falha"]
-    ws.cell(4, 12, "Ocorrência")
-    ws.cell(4, 13, "Severidade")
-    ws.cell(4, 14, "Detecção")
+    ws.cell(4, COL_O, "Ocorrência")
+    ws.cell(4, COL_S, "Severidade")
+    ws.cell(4, COL_D, "Detecção")
     saida = io.BytesIO()
     wb.save(saida)
     saida.seek(0)
@@ -320,7 +325,7 @@ def test_falta_de_coluna_de_nota_e_erro_bloqueante():
     )
     wb = openpyxl.load_workbook(buffer)
     ws = wb["Modos de falha"]
-    ws.cell(4, 12, "Outra coisa")  # sobrescreve o cabecalho "O"
+    ws.cell(4, COL_O, "Outra coisa")  # sobrescreve o cabecalho "O"
     saida = io.BytesIO()
     wb.save(saida)
     saida.seek(0)
