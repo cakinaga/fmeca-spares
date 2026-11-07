@@ -22,7 +22,6 @@ Uso minimo:
 from .parametros import (
     DIARIA_UTI_II_SUS,
     DIARIA_UTI_III_SUS,
-    AcaoDeteccao,
     FaixaCriticidade,
     FaixaLeadTime,
     ParametrosCusto,
@@ -39,10 +38,9 @@ from .leitura import (
     ler_fmeca,
 )
 from .modelo import (
-    AcaoModo,
     DecisaoComponente,
     decidir,
-    plano_de_acao,
+    escala_do_formulario,
     downtime_cost_evitavel,
     downtime_cost_anual_esperado,
     classificar_zona,
@@ -54,7 +52,6 @@ from .modelo import (
 __all__ = [
     "DIARIA_UTI_II_SUS",
     "DIARIA_UTI_III_SUS",
-    "AcaoDeteccao",
     "FaixaCriticidade",
     "FaixaLeadTime",
     "ParametrosCusto",
@@ -67,10 +64,9 @@ __all__ = [
     "RelatorioValidacao",
     "FMECA",
     "ler_fmeca",
-    "AcaoModo",
     "DecisaoComponente",
     "decidir",
-    "plano_de_acao",
+    "escala_do_formulario",
     "downtime_cost_evitavel",
     "downtime_cost_anual_esperado",
     "classificar_zona",

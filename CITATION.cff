@@ -22,10 +22,8 @@ abstract: >-
   com o lead time de fornecimento para classificar cada componente em uma de
   três zonas de decisão — estoque de segurança local, ponto de pedido e compra
   sob demanda — e quantifica a exposição anual ao custo de indisponibilidade
-  por falta da peça (Downtime Cost). Um plano de ação complementar lê a
-  Detecção e o RPN de cada modo de falha para recomendar a ação de manutenção
-  que o estoque não substitui, como o teste funcional de falhas ocultas.
-  Acompanha um estudo de caso demonstrativo com um ventilador pulmonar de UTI.
+  por falta da peça (Downtime Cost). Os modos de falha oculta, lidos da
+  Detecção, são sinalizados na justificativa de cada componente. Acompanha um estudo de caso demonstrativo com um ventilador pulmonar de UTI.
 keywords:
   - engenharia clínica
   - FMECA

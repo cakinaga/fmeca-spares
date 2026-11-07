@@ -1,10 +1,8 @@
 """
-Exportacao do resultado: planilha de decisao, resumo, plano de acao,
-parametros e validacao.
+Exportacao do resultado: planilha de decisao, resumo, parametros e validacao.
 
-A aba de parametros existe para que o resultado seja reproduzivel: qualquer
-tabela exportada carrega consigo os limiares e os custos que a produziram, sem
-os quais a classificacao nao pode ser conferida nem repetida.
+A aba de parametros registra os limiares e custos usados, para que o resultado
+possa ser conferido e repetido.
 """
 
 from __future__ import annotations
@@ -22,7 +20,6 @@ from .leitura import FMECA, RelatorioValidacao
 from .modelo import (
     DecisaoComponente,
     ordenar_para_relatorio,
-    plano_de_acao,
     resumo_por_zona,
 )
 from .parametros import (
@@ -193,66 +190,13 @@ def _aba_resumo(wb: Workbook, decisoes: Sequence[DecisaoComponente]) -> None:
         ws.cell(i, 5, ", ".join(str(x) for x in dados["ids"]))
 
 
-COLUNAS_PLANO = [
-    ("Alerta", 8),
-    ("Sub ID", 8),
-    ("Componente", 30),
-    ("Modo de falha", 40),
-    ("S", 5),
-    ("O", 5),
-    ("D", 5),
-    ("RPN", 8),
-    ("Criticidade (S × O)", 13),
-    ("Zona do componente", 24),
-    ("Detecção atual", 50),
-    ("Ação recomendada", 34),
-]
-
-
-def _aba_plano(
-    wb: Workbook,
-    fmeca: FMECA,
-    decisoes: Sequence[DecisaoComponente],
-    deteccao: ParametrosDeteccao,
-) -> None:
-    ws = wb.create_sheet("Plano de ação")
-    _cabecalho(ws, 1, [(t, w, "") for t, w in COLUNAS_PLANO])
-    for i, a in enumerate(plano_de_acao(fmeca, decisoes, deteccao), start=2):
-        m = a.modo
-        valores = [
-            "sim" if a.alerta else None,
-            m.sub_id,
-            a.componente.nome if a.componente else m.componente,
-            m.modo,
-            m.severidade,
-            m.ocorrencia,
-            m.deteccao_nota,
-            a.rpn,
-            a.criticidade,
-            a.zona.rotulo if a.zona else "Sem zona atribuída",
-            m.deteccao,
-            a.acao.rotulo if a.acao else None,
-        ]
-        for col, valor in enumerate(valores, start=1):
-            cel = ws.cell(i, col, valor)
-            cel.font = Font(size=9, bold=a.alerta and col == 1)
-            cel.border = Border(bottom=FINA)
-            if col in (1, 2, 5, 6, 7, 8, 9):
-                cel.alignment = Alignment(horizontal="center", vertical="top")
-            else:
-                cel.alignment = Alignment(wrap_text=True, vertical="top")
-        if a.alerta:
-            ws.cell(i, 1).fill = PatternFill("solid", fgColor=COR_ZONA[Zona.ESTOQUE_SEGURANCA])
-    ws.freeze_panes = "C2"
-    ws.auto_filter.ref = f"A1:{get_column_letter(len(COLUNAS_PLANO))}{ws.max_row}"
-
-
 def _aba_parametros(
     wb: Workbook,
     custo: ParametrosCusto,
     zonas: ParametrosZona,
     escala: ParametrosOcorrencia,
     deteccao: ParametrosDeteccao,
+    escala_lida: tuple | None = None,
 ) -> None:
     ws = wb.create_sheet("Parâmetros")
     ws.column_dimensions["A"].width = 46
@@ -278,13 +222,17 @@ def _aba_parametros(
 
     secao("Limiares das zonas")
     item("Criticidade — piso da faixa alta", zonas.criticidade_alta,
-         "Menor S × O que combina perda de função crítica com ocorrência ao menos ocasional.")
-    item("Criticidade — piso da faixa média", zonas.criticidade_media)
-    item("Lead time — teto da faixa curta (dias)", zonas.lead_time_curto_dias)
-    item("Lead time — piso da faixa longa (dias)", zonas.lead_time_longo_dias)
-    item("Piso de ponto de pedido para demanda programada",
-         "sim" if zonas.piso_ponto_pedido_demanda_programada else "não",
-         "Consumíveis não caem em compra sob demanda.")
+         "A partir deste S × O, a falha compromete uma função essencial e "
+         "acontece com frequência pelo menos ocasional.")
+    item("Criticidade — piso da faixa média", zonas.criticidade_media,
+         "A partir deste S × O, a falha é grave, ainda que rara, ou ocasional, "
+         "ainda que de efeito leve.")
+    item("Lead time — teto da faixa curta (dias)", zonas.lead_time_curto_dias,
+         "Até este prazo, a peça chega rápido o bastante para o equipamento "
+         "voltar a operar logo depois da falha.")
+    item("Lead time — teto da faixa média (dias)", zonas.lead_time_longo_dias,
+         "Acima deste prazo, a espera deixa o equipamento parado por tempo "
+         "demais para ser coberta por uma compra feita só depois da falha.")
     linha[0] += 1
 
     secao("Custo de indisponibilidade")
@@ -293,20 +241,21 @@ def _aba_parametros(
     linha[0] += 1
 
     secao("Escala de Ocorrência → taxa de falha")
+    item("Origem da escala",
+         "aba «Tabela»" if escala.faixas == escala_lida else "padrão do modelo",
+         "Faixas de λ lidas da escala de Ocorrência do formulário."
+         if escala.faixas == escala_lida
+         else "A escala da aba «Tabela» não foi usada; ver a aba Validação.")
     item("Posição tomada dentro da faixa", escala.posicao_na_faixa,
-         "0 = piso da faixa, 0,5 = meio, 1 = teto. Alavanca de sensibilidade.")
+         "0,5 = média da faixa; 1 = teto da faixa, cenário mais desfavorável.")
     for minimo, maximo, piso, teto in escala.faixas:
         item(f"O {minimo}–{maximo} → λ", piso + (teto - piso) * escala.posicao_na_faixa,
              f"faixa declarada na escala: {piso:g} a {teto:g} falha/ano por unidade")
     linha[0] += 1
 
-    secao("Plano de ação (Detecção)")
+    secao("Detecção")
     item("D a partir da qual a falha é oculta", deteccao.limiar_oculta,
-         "Ação: incluir teste funcional na preventiva. Não altera a zona de estoque.")
-    item("D a partir da qual a detecção depende da preventiva", deteccao.limiar_preventiva,
-         "Ação: manter o intervalo da preventiva.")
-    item("S a partir da qual a falha oculta gera alerta", deteccao.severidade_alerta,
-         "Alerta quando o componente não está em estoque de segurança.")
+         "Marca o modo na justificativa. Não altera a zona de estoque.")
 
 
 def _aba_validacao(wb: Workbook, validacao: RelatorioValidacao) -> None:
@@ -345,8 +294,7 @@ def construir_planilha(
     wb = Workbook()
     _aba_decisao(wb, fmeca, decisoes)
     _aba_resumo(wb, decisoes)
-    _aba_plano(wb, fmeca, decisoes, deteccao)
-    _aba_parametros(wb, custo, zonas, escala, deteccao)
+    _aba_parametros(wb, custo, zonas, escala, deteccao, fmeca.escala_ocorrencia)
     _aba_validacao(wb, validacao or fmeca.validacao)
     return wb
 
@@ -371,9 +319,7 @@ def exportar_xlsx(
     return dados
 
 
-# Casas decimais por coluna no CSV. A taxa de falha precisa de mais de duas:
-# com a posicao na faixa em 0,05, lambda da faixa O 1-2 vale 0,025 e, com duas
-# casas, sairia como 0,03.
+# casas decimais por coluna no CSV; as demais colunas usam duas
 DECIMAIS_CSV = {"taxa": 4, "lead_time": 1}
 
 

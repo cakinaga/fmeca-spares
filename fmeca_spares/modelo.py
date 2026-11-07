@@ -17,20 +17,15 @@ A decisao de estoque de cada componente sai do cruzamento de dois eixos:
 O Downtime Cost evitavel e a traducao monetaria do segundo eixo: quanto custa,
 por evento de falha, o tempo de espera pela peca. Ele nao reclassifica o
 componente; serve para ordenar dentro de cada zona.
-
-O plano de acao e complementar e tambem nao reclassifica: le a Deteccao e o
-RPN de cada modo de falha para recomendar a acao de manutencao que o estoque
-nao substitui, como o teste funcional de uma falha oculta.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Sequence
 
 from .leitura import FMECA, Componente, ModoDeFalha, RelatorioValidacao
 from .parametros import (
-    AcaoDeteccao,
     FaixaCriticidade,
     FaixaLeadTime,
     ParametrosCusto,
@@ -83,11 +78,6 @@ def downtime_cost_anual_esperado(
     Exposicao anual da unidade ao custo de espera por peca, em reais por ano.
 
         DC_anual = DC_evitavel x lambda(O) x frota
-
-    E a grandeza comparavel ao custo de manter a peca em estoque, porque
-    incorpora a frequencia do evento. O DC evitavel isolado depende apenas do
-    lead time e, por isso, ordena mal: um componente de lead time longo e
-    falha rara aparece acima de um componente critico de falha frequente.
     """
     dc = downtime_cost_evitavel(lead_time_dias, custo)
     taxa = escala.taxa_anual(ocorrencia)
@@ -104,33 +94,19 @@ def classificar_zona(
     criticidade: float | None,
     lead_time_dias: float | None,
     zonas: ParametrosZona,
-    demanda_programada: bool = False,
-) -> tuple[Zona | None, FaixaCriticidade | None, FaixaLeadTime | None, bool]:
+) -> tuple[Zona | None, FaixaCriticidade | None, FaixaLeadTime | None]:
     """
     Classifica um componente em uma zona de estoque.
 
-    `demanda_programada` marca os consumiveis, cuja demanda vem do calendario.
-    Devolve a zona, as duas faixas e um sinalizador indicando se o piso de
-    demanda programada foi aplicado. Zona None quando falta Criticidade ou
+    Devolve a zona e as duas faixas. Zona None quando falta Criticidade ou
     lead time.
     """
     if criticidade is None or lead_time_dias is None:
-        return None, None, None, False
+        return None, None, None
 
     faixa_c = zonas.faixa_criticidade(criticidade)
     faixa_l = zonas.faixa_lead_time(lead_time_dias)
-    zona = MATRIZ_ZONAS[(faixa_c, faixa_l)]
-
-    ajustado = False
-    if (
-        demanda_programada
-        and zonas.piso_ponto_pedido_demanda_programada
-        and zona.ordem < Zona.PONTO_PEDIDO.ordem
-    ):
-        zona = Zona.PONTO_PEDIDO
-        ajustado = True
-
-    return zona, faixa_c, faixa_l, ajustado
+    return MATRIZ_ZONAS[(faixa_c, faixa_l)], faixa_c, faixa_l
 
 
 # --------------------------------------------------------------------------
@@ -152,8 +128,6 @@ class DecisaoComponente:
     dc_evitavel: float | None
     taxa_falha_anual: float | None
     dc_anual_esperado: float | None
-    demanda_programada: bool
-    piso_demanda_programada_aplicado: bool
     justificativa: str
     # modos com Deteccao a partir do limiar de falha oculta, por RPN decrescente
     modos_ocultos: tuple[ModoDeFalha, ...] = ()
@@ -198,7 +172,6 @@ def _justificar(
     faixa_l: FaixaLeadTime | None,
     zona: Zona | None,
     modo: ModoDeFalha | None,
-    piso_programada: bool,
     modos_ocultos: Sequence[ModoDeFalha] = (),
 ) -> str:
     if zona is None:
@@ -218,12 +191,6 @@ def _justificar(
         partes.append(
             f"A Criticidade é fixada pelo modo {modo.sub_id} — {modo.modo} "
             f"(S={modo.severidade}, O={modo.ocorrencia})."
-        )
-    if piso_programada:
-        partes.append(
-            "Consumível: a demanda é determinada pelo intervalo de troca, não "
-            "pela ocorrência de falha, de modo que o piso aplicado é o ponto "
-            "de pedido."
         )
     if modos_ocultos:
         partes.append(_alerta_oculta(modos_ocultos))
@@ -251,6 +218,20 @@ def _fmt_dias(dias: float | None) -> str:
     return f"{dias:.1f} dias".replace(".", ",")
 
 
+def escala_do_formulario(
+    fmeca: FMECA, escala: ParametrosOcorrencia | None = None
+) -> ParametrosOcorrencia:
+    """
+    A escala de Ocorrencia a usar: as faixas lidas da aba Tabela do formulario,
+    quando houver, com a posicao na faixa de `escala`. Sem faixas lidas, fica a
+    escala padrao.
+    """
+    escala = escala or ParametrosOcorrencia()
+    if fmeca.escala_ocorrencia is None:
+        return escala
+    return replace(escala, faixas=fmeca.escala_ocorrencia)
+
+
 def decidir(
     fmeca: FMECA,
     custo: ParametrosCusto | None = None,
@@ -269,10 +250,13 @@ def decidir(
 
     `deteccao` nao altera a zona: so marca os modos de falha oculta, que
     entram na justificativa como alerta.
+
+    Sem `escala_ocorrencia`, a taxa de falha usa a escala lida da aba Tabela
+    (ver escala_do_formulario). Uma escala informada e usada como esta.
     """
     custo = custo or ParametrosCusto()
     zonas = zonas or ParametrosZona()
-    escala_ocorrencia = escala_ocorrencia or ParametrosOcorrencia()
+    escala_ocorrencia = escala_ocorrencia or escala_do_formulario(fmeca)
     deteccao = deteccao or ParametrosDeteccao()
 
     decisoes: list[DecisaoComponente] = []
@@ -287,11 +271,8 @@ def decidir(
         criticidade = max(criticidades) if criticidades else comp.criticidade
         rpn = max(rpns) if rpns else comp.rpn
 
-        # S e O vem do modo dimensionante, nao do maximo de cada nota em
-        # separado. Assim a linha do relatorio fecha: Criticidade = S x O com
-        # os valores exibidos ao lado. Tomar o maximo de cada nota
-        # isoladamente produziria um S e um O que podem pertencer a modos
-        # diferentes, e o produto deles nao seria a Criticidade usada.
+        # S e O vem do modo dimensionante, e nao do maximo de cada nota, para
+        # que S x O exibidos fechem com a Criticidade usada.
         severidade = modo.severidade if modo else None
         ocorrencia = modo.ocorrencia if modo else None
 
@@ -310,10 +291,7 @@ def decidir(
                 )
 
         lead = comp.lead_time_dias
-        programada = comp.consumivel
-        zona, faixa_c, faixa_l, piso = classificar_zona(
-            criticidade, lead, zonas, demanda_programada=programada
-        )
+        zona, faixa_c, faixa_l = classificar_zona(criticidade, lead, zonas)
         dc = downtime_cost_evitavel(lead, custo)
         taxa = escala_ocorrencia.taxa_anual(ocorrencia)
         dc_anual = downtime_cost_anual_esperado(lead, ocorrencia, custo, escala_ocorrencia)
@@ -339,85 +317,14 @@ def decidir(
                 dc_evitavel=dc,
                 taxa_falha_anual=taxa,
                 dc_anual_esperado=dc_anual,
-                demanda_programada=programada,
-                piso_demanda_programada_aplicado=piso,
                 justificativa=_justificar(
-                    criticidade, lead, faixa_c, faixa_l, zona, modo, piso, ocultos,
+                    criticidade, lead, faixa_c, faixa_l, zona, modo, ocultos,
                 ),
                 modos_ocultos=ocultos,
             )
         )
 
     return decisoes
-
-
-# --------------------------------------------------------------------------
-# plano de acao (Deteccao e RPN)
-# --------------------------------------------------------------------------
-
-@dataclass(frozen=True)
-class AcaoModo:
-    """Recomendacao de manutencao para um modo de falha."""
-
-    modo: ModoDeFalha
-    componente: Componente | None
-    zona: Zona | None
-    acao: AcaoDeteccao | None
-    # falha catastrofica e oculta em componente fora do estoque de seguranca
-    alerta: bool
-
-    @property
-    def rpn(self) -> int | None:
-        return self.modo.rpn_calculado
-
-    @property
-    def criticidade(self) -> int | None:
-        return self.modo.criticidade_calculada
-
-
-def plano_de_acao(
-    fmeca: FMECA,
-    decisoes: Sequence[DecisaoComponente],
-    deteccao: ParametrosDeteccao | None = None,
-) -> list[AcaoModo]:
-    """
-    Uma recomendacao por modo de falha, ordenada por alerta e depois por RPN.
-
-    A acao vem da nota de Deteccao (ver ParametrosDeteccao). O alerta marca o
-    modo com Severidade a partir de `severidade_alerta` e Deteccao oculta cujo
-    componente nao esta em estoque de seguranca: o risco que a Criticidade
-    (S x O) subestima, por ignorar a Deteccao.
-    """
-    deteccao = deteccao or ParametrosDeteccao()
-    zona_de = {d.id: d.zona for d in decisoes}
-
-    plano = []
-    for m in fmeca.modos:
-        zona = zona_de.get(m.id_componente)
-        alerta = (
-            deteccao.oculta(m.deteccao_nota)
-            and m.severidade is not None
-            and m.severidade >= deteccao.severidade_alerta
-            and zona is not Zona.ESTOQUE_SEGURANCA
-        )
-        plano.append(
-            AcaoModo(
-                modo=m,
-                componente=fmeca.componente(m.id_componente),
-                zona=zona,
-                acao=deteccao.acao(m.deteccao_nota),
-                alerta=alerta,
-            )
-        )
-    return sorted(
-        plano,
-        key=lambda a: (
-            not a.alerta,
-            -(a.rpn or 0),
-            -(a.criticidade or 0),
-            a.modo.sub_id,
-        ),
-    )
 
 
 # --------------------------------------------------------------------------

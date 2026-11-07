@@ -5,13 +5,16 @@ O lead time de cada componente vem da propria aba "Matriz de componentes",
 na coluna "Lead time (dias)": o formulario e a unica entrada do modelo.
 
 As colunas sao localizadas pelo texto do cabecalho, nao pela posicao, para que
-o modulo continue lendo o formulario depois de insercoes ou remocoes de coluna
-(o proprio formulario do ventilador perdeu as colunas "Fontes" e "Mercado"
-entre duas versoes).
+insercoes ou remocoes de coluna nao quebrem a leitura.
+
+A escala de Ocorrencia, que traduz cada nota em taxa de falha anual, e lida
+da aba "Tabela". Sem ela, ou se o texto nao puder ser lido, o modelo usa a
+escala padrao de ParametrosOcorrencia e a conferencia registra um aviso.
 """
 
 from __future__ import annotations
 
+import re
 import unicodedata
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -28,6 +31,10 @@ except ImportError as exc:  # pragma: no cover
 
 ABA_COMPONENTES = "Matriz de componentes"
 ABA_MODOS = "Modos de falha"
+ABA_TABELA = "Tabela"
+
+# (nota minima, nota maxima, lambda piso, lambda teto), em falha/ano por unidade
+FaixaOcorrencia = tuple[int, int, float, float]
 
 # Valores canonicos da coluna Natureza, ja na forma em que sao exibidos.
 NATUREZA_CONSUMIVEL = "Consumível"
@@ -188,6 +195,8 @@ class FMECA:
     componentes: list[Componente]
     modos: list[ModoDeFalha]
     validacao: RelatorioValidacao
+    # escala de Ocorrencia lida da aba Tabela; None quando nao foi possivel ler
+    escala_ocorrencia: tuple[FaixaOcorrencia, ...] | None = None
 
     def modos_de(self, id_componente: int) -> list[ModoDeFalha]:
         return [m for m in self.modos if m.id_componente == id_componente]
@@ -295,8 +304,7 @@ _COLS_MODOS = {
     "criticidade": ("criticidade",),
 }
 
-# Cabecalhos de uma letra exigem igualdade: por prefixo, qualquer coluna que
-# comece com O, S ou D roubaria a coluna da nota correspondente.
+# cabecalhos de uma letra exigem igualdade (ver _mapear_colunas)
 _MODOS_EXATOS = frozenset({"ocorrencia", "severidade", "deteccao_nota"})
 
 
@@ -364,6 +372,16 @@ def ler_fmeca(origem: str | Path | BinaryIO) -> FMECA:
     modos = _ler_modos(linhas_modos, rel)
     _validar_cruzado(componentes, modos, rel)
 
+    nome_tabela = nomes.get(normalizar(ABA_TABELA))
+    if nome_tabela is None:
+        escala = None
+        rel.aviso(
+            f'aba "{ABA_TABELA}" não encontrada; a taxa de falha usa a escala '
+            "de Ocorrência padrão do modelo"
+        )
+    else:
+        escala = ler_escala_ocorrencia(_linhas(wb[nome_tabela]), rel)
+
     return FMECA(
         equipamento=ident["equipamento"],
         modelo=ident["modelo"],
@@ -373,7 +391,112 @@ def ler_fmeca(origem: str | Path | BinaryIO) -> FMECA:
         componentes=componentes,
         modos=modos,
         validacao=rel,
+        escala_ocorrencia=escala,
     )
+
+
+# --------------------------------------------------------------------------
+# escala de Ocorrencia (aba Tabela)
+# --------------------------------------------------------------------------
+
+_NOTAS = re.compile(r"^(\d{1,2})(?:\s*(?:[-–—]|a|ate)\s*(\d{1,2}))?$")
+_NUMERO = re.compile(r"\d+(?:[.,]\d+)?")
+# palavras inteiras, para que "ate" nao case dentro de "material"
+_ACIMA = re.compile(r"\b(?:acima|maior|superior|mais de)\b|>")
+_ABAIXO = re.compile(r"\b(?:abaixo|menor|inferior|menos de|ate)\b|<")
+
+
+def _faixa_de_notas(valor: Any) -> tuple[int, int] | None:
+    """'1–2', '1-2', '1 a 2' ou 9 -> (minimo, maximo)."""
+    if isinstance(valor, (int, float)) and not isinstance(valor, bool):
+        n = int(valor)
+        return (n, n) if n == valor else None
+    casou = _NOTAS.match(normalizar(valor))
+    if casou is None:
+        return None
+    minimo = int(casou.group(1))
+    return minimo, int(casou.group(2) or minimo)
+
+
+def _taxa_do_texto(texto: str) -> tuple[float, float] | None:
+    """
+    Le o intervalo de lambda na descricao de uma nota: "entre 0,5 e 1,0" da
+    (0,5; 1,0), "abaixo de 0,5" da (0; 0,5) e "acima de 3,0" da (3,0; 3,0).
+    """
+    n = normalizar(texto)
+    numeros = [float(x.replace(",", ".")) for x in _NUMERO.findall(n)]
+    if len(numeros) >= 2:
+        return numeros[0], numeros[1]
+    if len(numeros) == 1:
+        if _ACIMA.search(n):
+            return numeros[0], numeros[0]
+        if _ABAIXO.search(n):
+            return 0.0, numeros[0]
+    return None
+
+
+def ler_escala_ocorrencia(
+    linhas: Sequence[Sequence[Any]], rel: RelatorioValidacao
+) -> tuple[FaixaOcorrencia, ...] | None:
+    """
+    Le a secao de Ocorrencia da aba Tabela: a linha cujo primeiro texto comeca
+    por "Ocorrencia", seguida de uma linha por faixa de notas (nota na
+    primeira celula preenchida, descricao com a taxa de falha na segunda). A
+    secao termina na primeira linha que nao seja de faixa de notas, depois de
+    ao menos uma lida.
+
+    Devolve None, com aviso, quando a secao nao existe, quando alguma taxa nao
+    pode ser lida ou quando as faixas nao cobrem as notas de 1 a 10 sem
+    lacunas e em ordem crescente de taxa.
+    """
+    padrao = "a taxa de falha usa a escala de Ocorrência padrão do modelo"
+    faixas: list[FaixaOcorrencia] = []
+    na_secao = False
+    for linha in linhas:
+        celulas = [c for c in linha if c is not None and str(c).strip()]
+        if not celulas:
+            continue
+        if not na_secao:
+            na_secao = normalizar(celulas[0]).startswith("ocorrencia")
+            continue
+        notas = _faixa_de_notas(celulas[0])
+        if notas is None:
+            if faixas:
+                break
+            continue  # linha de cabecalho da secao ("Nota", "Descricao")
+        taxa = _taxa_do_texto(str(celulas[1])) if len(celulas) > 1 else None
+        if taxa is None:
+            rel.aviso(
+                f'aba {ABA_TABELA}: não consegui ler a taxa de falha da nota '
+                f"{notas[0]}–{notas[1]} da escala de Ocorrência; {padrao}"
+            )
+            return None
+        faixas.append((notas[0], notas[1], taxa[0], taxa[1]))
+
+    if not na_secao or not faixas:
+        rel.aviso(f"aba {ABA_TABELA}: seção de Ocorrência não encontrada; {padrao}")
+        return None
+
+    faixas.sort()
+    esperado = 1
+    for minimo, maximo, piso, teto in faixas:
+        if minimo != esperado or maximo < minimo or teto < piso:
+            rel.aviso(
+                f"aba {ABA_TABELA}: a escala de Ocorrência precisa cobrir as "
+                f"notas de 1 a 10, sem lacunas nem sobreposições, com piso de λ "
+                f"menor ou igual ao teto; {padrao}"
+            )
+            return None
+        esperado = maximo + 1
+    if esperado != 11 or any(
+        faixas[i + 1][2] < faixas[i][2] for i in range(len(faixas) - 1)
+    ):
+        rel.aviso(
+            f"aba {ABA_TABELA}: a escala de Ocorrência precisa cobrir as notas "
+            f"de 1 a 10, com taxa de falha crescente com a nota; {padrao}"
+        )
+        return None
+    return tuple(faixas)
 
 
 def _ler_componentes(
@@ -462,8 +585,6 @@ def _ler_modos(
             rel.erro(f'coluna "{obrigatoria}" não encontrada na aba "{ABA_MODOS}"')
             return []
 
-    # Sem as notas nao ha FMECA: melhor falhar aqui do que seguir com a
-    # pontuacao vazia e produzir zonas a partir do valor da aba de matriz.
     faltantes = [
         rotulo
         for chave, rotulo in (("ocorrencia", "O"), ("severidade", "S"), ("deteccao_nota", "D"))

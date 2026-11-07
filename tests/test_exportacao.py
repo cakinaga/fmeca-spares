@@ -19,22 +19,11 @@ ZONAS = ParametrosZona()
 ESCALA = ParametrosOcorrencia()
 
 
-def test_xlsx_tem_as_cinco_abas(fmeca_caso):
+def test_xlsx_tem_as_quatro_abas(fmeca_caso):
     decisoes = decidir(fmeca_caso, CUSTO, ZONAS, escala_ocorrencia=ESCALA)
     dados = exportar_xlsx(fmeca_caso, decisoes, CUSTO, ZONAS, ESCALA)
     wb = openpyxl.load_workbook(io.BytesIO(dados))
-    assert wb.sheetnames == ["Decisão", "Resumo", "Plano de ação", "Parâmetros", "Validação"]
-
-
-def test_plano_exportado_tem_uma_linha_por_modo_e_alertas_primeiro(fmeca_caso):
-    decisoes = decidir(fmeca_caso, CUSTO, ZONAS, escala_ocorrencia=ESCALA)
-    dados = exportar_xlsx(fmeca_caso, decisoes, CUSTO, ZONAS, ESCALA)
-    ws = openpyxl.load_workbook(io.BytesIO(dados))["Plano de ação"]
-    assert ws.max_row - 1 == len(fmeca_caso.modos)
-    alertas = [ws.cell(r, 1).value for r in range(2, ws.max_row + 1)]
-    n = alertas.count("sim")
-    assert n > 0
-    assert alertas[:n] == ["sim"] * n
+    assert wb.sheetnames == ["Decisão", "Resumo", "Parâmetros", "Validação"]
 
 
 def test_xlsx_tem_uma_linha_por_componente(fmeca_caso):
@@ -76,8 +65,7 @@ def test_csv_tem_cabecalho_e_uma_linha_por_componente(fmeca_caso):
 def test_csv_usa_virgula_decimal(fmeca_caso):
     decisoes = decidir(fmeca_caso, CUSTO, ZONAS, escala_ocorrencia=ESCALA)
     texto = exportar_csv(decisoes)
-    # valor derivado dos parametros, nao fixado na marra: o componente de
-    # maior lead time x o custo de leito bloqueado.
+    # maior lead time x custo de leito bloqueado
     maior = max(d.dc_evitavel for d in decisoes)
     esperado = f"{maior:.2f}".replace(".", ",")
     assert esperado in texto
@@ -93,12 +81,7 @@ def test_exportacao_grava_em_disco(tmp_path, fmeca_caso):
 
 
 def test_csv_preserva_a_precisao_da_taxa_de_falha(fmeca_caso):
-    """
-    Regressao: com duas casas decimais, lambda da faixa O 1-2 (0,025) saía
-    como 0,03 no CSV, e a exposição anual recalculada a partir da planilha
-    não fechava com a do app. A posição 0,05 na faixa reproduz 0,025 com a
-    escala atual.
-    """
+    """λ de 0,025 (O 1-2, posição 0,05) não pode sair arredondado para 0,03."""
     escala = ParametrosOcorrencia(posicao_na_faixa=0.05)
     decisoes = decidir(fmeca_caso, CUSTO, ZONAS, escala_ocorrencia=escala)
     texto = exportar_csv(decisoes)

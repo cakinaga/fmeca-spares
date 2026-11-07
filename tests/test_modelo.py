@@ -8,7 +8,6 @@ from conftest import construir_fmeca
 from fmeca_spares import (
     DIARIA_UTI_II_SUS,
     DIARIA_UTI_III_SUS,
-    AcaoDeteccao,
     FaixaCriticidade,
     FaixaLeadTime,
     ParametrosCusto,
@@ -22,7 +21,6 @@ from fmeca_spares import (
     downtime_cost_evitavel,
     ler_fmeca,
     ordenar_para_relatorio,
-    plano_de_acao,
     resumo_por_zona,
 )
 from fmeca_spares.modelo import MATRIZ_ZONAS
@@ -105,23 +103,23 @@ def test_taxa_anual_no_meio_da_faixa():
     esc = ParametrosOcorrencia(posicao_na_faixa=0.5)
     assert esc.taxa_anual(1) == pytest.approx(0.25)
     assert esc.taxa_anual(2) == pytest.approx(0.25)
-    assert esc.taxa_anual(3) == pytest.approx(0.75)
-    assert esc.taxa_anual(5) == pytest.approx(1.25)
-    assert esc.taxa_anual(7) == pytest.approx(2.25)
-    assert esc.taxa_anual(9) == pytest.approx(3.0)
+    assert esc.taxa_anual(3) == pytest.approx(0.70)
+    assert esc.taxa_anual(5) == pytest.approx(1.45)
+    assert esc.taxa_anual(7) == pytest.approx(2.95)
+    assert esc.taxa_anual(9) == pytest.approx(4.0)
     assert esc.taxa_anual(None) is None
 
 
 def test_taxa_anual_nos_extremos_da_faixa():
     assert ParametrosOcorrencia(posicao_na_faixa=0.0).taxa_anual(5) == pytest.approx(1.0)
-    assert ParametrosOcorrencia(posicao_na_faixa=1.0).taxa_anual(5) == pytest.approx(1.5)
+    assert ParametrosOcorrencia(posicao_na_faixa=1.0).taxa_anual(5) == pytest.approx(1.9)
 
 
 def test_faixa_aberta_em_cima_fica_no_piso():
     for posicao in (0.0, 0.5, 1.0):
         esc = ParametrosOcorrencia(posicao_na_faixa=posicao)
-        assert esc.taxa_anual(9) == pytest.approx(3.0)
-        assert esc.taxa_anual(10) == pytest.approx(3.0)
+        assert esc.taxa_anual(9) == pytest.approx(4.0)
+        assert esc.taxa_anual(10) == pytest.approx(4.0)
 
 
 def test_faixas_cobrem_toda_a_escala_sem_sobreposicao():
@@ -139,8 +137,8 @@ def test_dc_anual_multiplica_taxa_e_frota():
         custo_leito_dia=1000, frota_equipamentos=10
     )
     esc = ParametrosOcorrencia(posicao_na_faixa=0.5)
-    # DC por evento = 10 x 1000 = 10.000; lambda(O=5) = 1,25; frota = 10
-    assert downtime_cost_anual_esperado(10, 5, custo, esc) == pytest.approx(125_000)
+    # DC por evento = 10 x 1000 = 10.000; lambda(O=5) = 1,45; frota = 10
+    assert downtime_cost_anual_esperado(10, 5, custo, esc) == pytest.approx(145_000)
     assert downtime_cost_anual_esperado(10, None, custo, esc) is None
     assert downtime_cost_anual_esperado(None, 5, custo, esc) is None
 
@@ -181,27 +179,6 @@ def test_zona_ausente_sem_criticidade_ou_lead_time():
     assert classificar_zona(50, None, z)[0] is None
 
 
-def test_piso_de_demanda_programada_eleva_sob_demanda():
-    z = ParametrosZona()
-    zona, _, _, ajustado = classificar_zona(5, 3, z, demanda_programada=True)
-    assert zona is Zona.PONTO_PEDIDO
-    assert ajustado is True
-
-
-def test_piso_de_demanda_programada_nao_rebaixa_estoque_de_seguranca():
-    z = ParametrosZona()
-    zona, _, _, ajustado = classificar_zona(90, 60, z, demanda_programada=True)
-    assert zona is Zona.ESTOQUE_SEGURANCA
-    assert ajustado is False
-
-
-def test_piso_pode_ser_desligado():
-    z = ParametrosZona(piso_ponto_pedido_demanda_programada=False)
-    zona, _, _, ajustado = classificar_zona(5, 3, z, demanda_programada=True)
-    assert zona is Zona.SOB_DEMANDA
-    assert ajustado is False
-
-
 # -- decisao ----------------------------------------------------------------
 
 _MODOS_SIMPLES = [
@@ -230,8 +207,7 @@ def test_decidir_atribui_zonas_esperadas():
     decisoes = {d.id: d for d in decidir(fmeca)}
     assert decisoes[1].zona is Zona.ESTOQUE_SEGURANCA
     assert decisoes[2].zona is Zona.SOB_DEMANDA
-    assert decisoes[3].zona is Zona.PONTO_PEDIDO  # piso de consumivel
-    assert decisoes[3].piso_demanda_programada_aplicado is True
+    assert decisoes[3].zona is Zona.SOB_DEMANDA
 
 
 def test_lead_time_vem_da_matriz_de_componentes():
@@ -291,8 +267,8 @@ def test_resumo_por_zona_soma_e_conta():
     decisoes = decidir(fmeca, custo)
     resumo = resumo_por_zona(decisoes)
     assert resumo[Zona.ESTOQUE_SEGURANCA.rotulo]["componentes"] == 1
-    assert resumo[Zona.PONTO_PEDIDO.rotulo]["componentes"] == 1
-    assert resumo[Zona.SOB_DEMANDA.rotulo]["componentes"] == 1
+    assert resumo[Zona.PONTO_PEDIDO.rotulo]["componentes"] == 0
+    assert resumo[Zona.SOB_DEMANDA.rotulo]["componentes"] == 2
     assert resumo["Sem zona atribuída"]["componentes"] == 0
     total = sum(v["dc_anual_total"] for v in resumo.values())
     assert total == pytest.approx(sum(d.dc_anual_esperado or 0 for d in decisoes))
@@ -308,9 +284,8 @@ def test_ordenacao_coloca_estoque_de_seguranca_primeiro():
 def test_lead_time_longo_sustenta_o_estoque_de_seguranca_sozinho():
     """
     Elevar o corte de Criticidade nao tira do estoque de seguranca um
-    componente de lead time longo: a celula (media, longo) da matriz tambem e
-    estoque de seguranca. E o comportamento pretendido — mais de um mes de
-    equipamento parado basta para justificar a peca na prateleira.
+    componente de lead time longo: a celula (media, longo) tambem e estoque de
+    seguranca.
     """
     fmeca = _caso_simples()  # componente 1: Criticidade 60, 45 dias
     frouxo = {d.id: d for d in decidir(fmeca, zonas=ParametrosZona(criticidade_alta=80))}
@@ -328,21 +303,13 @@ def test_estudo_de_caso_classifica_todos_os_componentes(fmeca_caso):
 
 
 def test_estudo_de_caso_zonas_de_referencia(fmeca_caso):
-    """
-    Regressao sobre os limiares padrao e os lead times ilustrativos da aba
-    Matriz de componentes. Se os defaults ou o formulario de demonstracao
-    mudarem, este teste deve mudar junto, de forma deliberada.
-
-    O piso de demanda programada vale so para consumiveis: celula de O2 e
-    o-rings sao Peca no formulario e, sem marcacao de troca programada, caem
-    em compra sob demanda.
-    """
+    """Regressao sobre os limiares padrao e os lead times do estudo de caso."""
     decisoes = {d.id: d for d in decidir(fmeca_caso)}
     assert decisoes[19].zona is Zona.ESTOQUE_SEGURANCA  # turbina
     assert decisoes[17].zona is Zona.ESTOQUE_SEGURANCA  # placa de controle
     assert decisoes[7].zona is Zona.ESTOQUE_SEGURANCA   # sensor de fluxo
     assert decisoes[8].zona is Zona.ESTOQUE_SEGURANCA   # valvula expiratoria
-    assert decisoes[1].zona is Zona.PONTO_PEDIDO        # circuito, consumivel
+    assert decisoes[1].zona is Zona.SOB_DEMANDA         # circuito, consumivel
     assert decisoes[5].zona is Zona.SOB_DEMANDA         # rodizios
     assert decisoes[6].zona is Zona.SOB_DEMANDA         # celula de O2
     assert decisoes[9].zona is Zona.SOB_DEMANDA         # o-rings
@@ -351,8 +318,8 @@ def test_estudo_de_caso_zonas_de_referencia(fmeca_caso):
     for d in decisoes.values():
         por_zona[d.zona] = por_zona.get(d.zona, 0) + 1
     assert por_zona[Zona.ESTOQUE_SEGURANCA] == 6
-    assert por_zona[Zona.PONTO_PEDIDO] == 10
-    assert por_zona[Zona.SOB_DEMANDA] == 7
+    assert por_zona[Zona.PONTO_PEDIDO] == 5
+    assert por_zona[Zona.SOB_DEMANDA] == 12
 
 
 def test_estudo_de_caso_corte_mais_alto_reduz_o_estoque_de_seguranca(
@@ -430,23 +397,21 @@ def test_sem_aviso_quando_o_modo_dimensionante_tem_a_maior_ocorrencia(fmeca_caso
     assert not any("pode estar subestimada" in a for a in rel.avisos)
 
 
-# -- plano de acao (Deteccao e RPN) -----------------------------------------
+# -- Deteccao (falha oculta) ------------------------------------------------
 
-def test_limiares_de_deteccao_invertidos_sao_rejeitados():
+def test_limiar_de_deteccao_fora_da_escala_e_rejeitado():
     with pytest.raises(ValueError):
-        ParametrosDeteccao(limiar_preventiva=7, limiar_oculta=5)
+        ParametrosDeteccao(limiar_oculta=0)
     with pytest.raises(ValueError):
-        ParametrosDeteccao(severidade_alerta=11)
+        ParametrosDeteccao(limiar_oculta=11)
 
 
-def test_acao_segue_a_escala_de_deteccao():
+def test_oculta_segue_a_escala_de_deteccao():
     det = ParametrosDeteccao()
-    assert det.acao(None) is None
-    assert det.acao(4) is AcaoDeteccao.ADEQUADA
-    assert det.acao(5) is AcaoDeteccao.MANTER_PREVENTIVA
-    assert det.acao(6) is AcaoDeteccao.MANTER_PREVENTIVA
-    assert det.acao(7) is AcaoDeteccao.TESTE_FUNCIONAL
-    assert det.acao(10) is AcaoDeteccao.TESTE_FUNCIONAL
+    assert det.oculta(None) is False
+    assert det.oculta(6) is False
+    assert det.oculta(7) is True
+    assert det.oculta(10) is True
 
 
 def _caso_oculto():
@@ -475,7 +440,7 @@ def _caso_oculto():
 def test_deteccao_nao_altera_a_zona():
     fmeca = _caso_oculto()
     padrao = {d.id: d.zona for d in decidir(fmeca)}
-    rigido = {d.id: d.zona for d in decidir(fmeca, deteccao=ParametrosDeteccao(limiar_oculta=2, limiar_preventiva=1))}
+    rigido = {d.id: d.zona for d in decidir(fmeca, deteccao=ParametrosDeteccao(limiar_oculta=2))}
     assert padrao == rigido
 
 
@@ -488,35 +453,7 @@ def test_justificativa_alerta_falha_oculta():
     assert "falha oculta" not in decisoes[3].justificativa
 
 
-def test_alerta_so_para_oculta_grave_fora_do_estoque_de_seguranca():
-    fmeca = _caso_oculto()
-    decisoes = decidir(fmeca)
-    plano = {a.modo.sub_id: a for a in plano_de_acao(fmeca, decisoes)}
-    assert plano["1.1"].zona is Zona.PONTO_PEDIDO
-    assert plano["1.1"].alerta is True
-    assert plano["2.1"].zona is Zona.ESTOQUE_SEGURANCA
-    assert plano["2.1"].alerta is False
-    assert plano["2.1"].acao is AcaoDeteccao.TESTE_FUNCIONAL
-    assert plano["3.1"].alerta is False
-    assert plano["3.1"].acao is AcaoDeteccao.ADEQUADA
-
-
-def test_plano_poe_alertas_primeiro_e_depois_ordena_por_rpn():
-    fmeca = _caso_oculto()
-    plano = plano_de_acao(fmeca, decidir(fmeca))
-    assert plano[0].modo.sub_id == "1.1"
-    rpns = [a.rpn for a in plano if not a.alerta]
-    assert rpns == sorted(rpns, reverse=True)
-
-
-def test_estudo_de_caso_plano_de_acao(fmeca_caso):
-    """
-    Regressao sobre a escala de Deteccao do formulario: 9 modos com D >= 7, e
-    alerta para as duas falhas catastroficas e ocultas que a Criticidade 30
-    deixa no ponto de pedido.
-    """
+def test_estudo_de_caso_modos_ocultos(fmeca_caso):
+    """Regressao sobre a escala de Deteccao do formulario: 9 modos com D >= 7."""
     decisoes = decidir(fmeca_caso)
-    plano = plano_de_acao(fmeca_caso, decisoes)
-    ocultos = [a for a in plano if a.acao is AcaoDeteccao.TESTE_FUNCIONAL]
-    assert len(ocultos) == 9
-    assert sorted(a.modo.sub_id for a in plano if a.alerta) == ["20.1", "22.1"]
+    assert sum(len(d.modos_ocultos) for d in decisoes) == 9

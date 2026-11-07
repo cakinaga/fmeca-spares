@@ -1,12 +1,4 @@
-"""
-Parametros do modelo: faixas, limiares e custo de leito bloqueado.
-
-Todos os parametros monetarios nascem em zero. A escolha e deliberada: o modulo
-nao embute valores de custo hospitalar, porque nao ha fonte publica brasileira
-que os sustente de forma generica. Quem aplica o modelo informa os proprios
-valores, e o app oferece um cenario ilustrativo explicitamente rotulado como
-tal.
-"""
+"""Parametros do modelo: faixas, limiares e custo de leito bloqueado."""
 
 from __future__ import annotations
 
@@ -68,69 +60,24 @@ class FaixaLeadTime(str, Enum):
         }[self]
 
 
-class AcaoDeteccao(str, Enum):
-    """Acao de manutencao recomendada pela nota de Deteccao de um modo de falha."""
-
-    TESTE_FUNCIONAL = "Incluir teste funcional na preventiva"
-    MANTER_PREVENTIVA = "Manter o intervalo da preventiva"
-    ADEQUADA = "Deteccao adequada"
-
-    @property
-    def rotulo(self) -> str:
-        return {
-            AcaoDeteccao.TESTE_FUNCIONAL: "Incluir teste funcional na preventiva",
-            AcaoDeteccao.MANTER_PREVENTIVA: "Manter o intervalo da preventiva",
-            AcaoDeteccao.ADEQUADA: "Detecção adequada",
-        }[self]
-
-    @property
-    def ordem(self) -> int:
-        """Ordem crescente de urgencia (0 = menor)."""
-        return {
-            AcaoDeteccao.ADEQUADA: 0,
-            AcaoDeteccao.MANTER_PREVENTIVA: 1,
-            AcaoDeteccao.TESTE_FUNCIONAL: 2,
-        }[self]
-
-
 @dataclass(frozen=True)
 class ParametrosZona:
     """
     Limiares que delimitam as faixas de Criticidade e de lead time.
 
-    Defaults e sua justificativa (ver README, secao "Calibracao dos limiares"):
+    criticidade_alta = 40      S 8 x O 5 ou S 10 x O 4
+    criticidade_media = 20     S 10 x O 2 ou S 4 x O 5
+    lead_time_curto_dias = 7   teto da faixa curta (fornecedor nacional)
+    lead_time_longo_dias = 30  teto da faixa media (importacao)
 
-    criticidade_alta = 40
-        Menor produto S x O que combina perda de funcao critica com ocorrencia
-        ao menos ocasional: S=8 (equipamento retirado de uso, risco potencial
-        ao paciente) com O=5 (falha ocasional), ou S=10 com O=4.
-
-    criticidade_media = 20
-        Piso da faixa em que a exposicao vem de um dos dois eixos isoladamente:
-        severidade critica com ocorrencia rara (S=10, O=2) ou severidade
-        moderada com ocorrencia frequente (S=4, O=5).
-
-    lead_time_curto_dias = 7
-        Fornecimento que devolve o equipamento a operacao na mesma semana,
-        compativel com peca nacional ou pronta entrega.
-
-    lead_time_longo_dias = 30
-        Acima de um mes de equipamento parado por falta de peca; faixa tipica
-        de importacao sem representacao consolidada no pais.
+    O limiar de Criticidade pertence a faixa de cima; o de lead time, a de
+    baixo.
     """
 
     criticidade_alta: int = 40
     criticidade_media: int = 20
     lead_time_curto_dias: float = 7.0
     lead_time_longo_dias: float = 30.0
-
-    # Consumiveis (Natureza = Consumivel na Matriz de componentes) tem demanda
-    # determinada pelo intervalo de troca, nao pela ocorrencia de falha.
-    # Quando verdadeiro, nenhum deles e classificado como compra sob demanda:
-    # o piso e o ponto de pedido. E a correcao de um vies conhecido do modelo:
-    # um item trocado por calendario pontua Ocorrencia baixa nas notificacoes
-    # de falha e, sem este piso, seria subdimensionado.
-    piso_ponto_pedido_demanda_programada: bool = True
 
     def __post_init__(self) -> None:
         if not 1 <= self.criticidade_media < self.criticidade_alta <= 100:
@@ -168,34 +115,21 @@ class ParametrosOcorrencia:
     """
     Traducao da nota de Ocorrencia em taxa de falha anual por unidade.
 
-    As faixas vem da propria escala de Ocorrencia do formulario FMECA (aba
-    "Tabela"), que define cada par de notas por um intervalo de lambda:
+    `faixas` sao (nota minima, nota maxima, lambda piso, lambda teto). O
+    padrao abaixo vale quando a escala da aba "Tabela" nao pode ser lida (ver
+    leitura.ler_escala_ocorrencia). A faixa aberta de baixo tem piso 0; a de
+    cima, sem teto declarado, e fixada no proprio piso.
 
-        O 1-2   lambda < 0,5 falha/ano por unidade
-        O 3-4   0,5 a 1,0
-        O 5-6   1,0 a 1,5
-        O 7-8   1,5 a 3,0
-        O 9-10  lambda > 3,0
-
-    O modelo nao estima lambda a partir dos dados: ele apenas le a escala que
-    o analista declarou ao pontuar. A faixa aberta embaixo recebe piso 0, que
-    e o limite natural de uma taxa. A faixa aberta em cima nao tem teto na
-    escala e e tomada no proprio piso (3,0), com piso = teto: e a leitura
-    conservadora, que subestima a exposicao em vez de supor um teto que a
-    escala nao declara.
-
-    `posicao_na_faixa` escolhe onde, dentro da faixa, o valor e tomado: 0,0 no
-    piso, 0,5 no meio, 1,0 no teto. Serve de alavanca de sensibilidade: rodar
-    o modelo em 0,0 e em 1,0 produz o intervalo de custo compativel com a
-    mesma pontuacao de FMECA. Nao afeta a faixa O 9-10, fixada no piso.
+    `posicao_na_faixa` escolhe o ponto do intervalo: 0 no piso, 0,5 no meio,
+    1 no teto.
     """
 
     faixas: tuple[tuple[int, int, float, float], ...] = (
         (1, 2, 0.0, 0.5),
-        (3, 4, 0.5, 1.0),
-        (5, 6, 1.0, 1.5),
-        (7, 8, 1.5, 3.0),
-        (9, 10, 3.0, 3.0),
+        (3, 4, 0.5, 0.9),
+        (5, 6, 1.0, 1.9),
+        (7, 8, 2.0, 3.9),
+        (9, 10, 4.0, 4.0),
     )
     posicao_na_faixa: float = 0.5
 
@@ -229,79 +163,28 @@ class ParametrosOcorrencia:
 @dataclass(frozen=True)
 class ParametrosDeteccao:
     """
-    Limiares do plano de acao, que le a nota de Deteccao de cada modo de falha.
+    Limiar de falha oculta, lido da nota de Deteccao de cada modo de falha.
 
-    A Deteccao fica fora da decisao de estoque (ver modelo.py): uma falha
-    facil de detectar continua exigindo a peca. Ela orienta, em vez disso, a
-    manutencao. Os defaults vem da escala de Deteccao do formulario FMECA (aba
-    "Tabela"):
-
-        D 1-4   alarme automatico ou checagem de rotina: deteccao adequada
-        D 5-6   depende de inspecao periodica ou preventiva
-        D 7-8   falha oculta ate o uso critico do equipamento
-        D 9-10  sem mecanismo de alerta; so percebida pela consequencia
-
-    limiar_oculta = 7
-        A partir daqui a falha so aparece no uso critico. A peca em estoque
-        encurta o reparo, mas nao antecipa a descoberta da falha: a acao que
-        reduz o risco e o teste funcional na manutencao preventiva.
-
-    limiar_preventiva = 5
-        A partir daqui a deteccao depende da preventiva, cujo intervalo deve
-        ser mantido.
-
-    severidade_alerta = 9
-        Modo de falha com Severidade a partir deste valor e Deteccao oculta
-        recebe alerta quando o componente nao esta em estoque de seguranca. E
-        o caso que a Criticidade (S x O) subestima: falha catastrofica, rara e
-        oculta, que cai na faixa media pela Ocorrencia baixa.
+    Nao altera a zona de estoque: so marca, na justificativa, os modos com D
+    a partir de `limiar_oculta` (padrao 7, falha oculta ate o uso critico na
+    escala de Deteccao do formulario).
     """
 
     limiar_oculta: int = 7
-    limiar_preventiva: int = 5
-    severidade_alerta: int = 9
 
     def __post_init__(self) -> None:
-        if not 1 <= self.limiar_preventiva < self.limiar_oculta <= 10:
+        if not 1 <= self.limiar_oculta <= 10:
             raise ValueError(
-                "limiares de deteccao invalidos: exige-se "
-                "1 <= limiar_preventiva < limiar_oculta <= 10 "
-                f"(recebido preventiva={self.limiar_preventiva}, "
-                f"oculta={self.limiar_oculta})"
+                "limiar_oculta deve estar entre 1 e 10 "
+                f"(recebido {self.limiar_oculta})"
             )
-        if not 1 <= self.severidade_alerta <= 10:
-            raise ValueError(
-                "severidade_alerta deve estar entre 1 e 10 "
-                f"(recebido {self.severidade_alerta})"
-            )
-
-    def acao(self, deteccao: int | None) -> AcaoDeteccao | None:
-        """Acao recomendada para a nota de Deteccao informada."""
-        if deteccao is None:
-            return None
-        if deteccao >= self.limiar_oculta:
-            return AcaoDeteccao.TESTE_FUNCIONAL
-        if deteccao >= self.limiar_preventiva:
-            return AcaoDeteccao.MANTER_PREVENTIVA
-        return AcaoDeteccao.ADEQUADA
 
     def oculta(self, deteccao: int | None) -> bool:
         return deteccao is not None and deteccao >= self.limiar_oculta
 
 
-# Diaria de UTI II adulto na tabela do SUS, procedimento SIGTAP
-# 08.02.01.008-3, fixada pela Portaria GM/MS no 160, de 25 de fevereiro de
-# 2022 (republicada): R$ 510,00 de Servico Hospitalar mais R$ 90,00 de
-# Servico Profissional. E o valor que a unidade deixa de faturar por cada dia
-# em que o leito nao pode ser ocupado, e por isso serve de custo de
-# oportunidade do leito bloqueado.
-#
-# Dois avisos de uso. Primeiro, o valor e de 2022: confira a tabela SIGTAP
-# vigente antes de citar. Segundo, a diaria do SUS esta abaixo do custo
-# operacional efetivo de um leito de UTI — Guimaraes, Dallora e Favaro
-# (Revista Qualidade HC, n. 57) apuraram R$ 1.114,10 por paciente-dia nas UTIs
-# COVID do HC-FMRP no primeiro semestre de 2021 contando apenas materiais e
-# medicamentos. Adotar a diaria do SUS e, portanto, a escolha conservadora.
+# Diarias de UTI adulto na tabela do SUS (SIGTAP 08.02.01.008-3 e
+# 08.02.01.009-1), Portaria GM/MS no 160, de 25 de fevereiro de 2022.
 DIARIA_UTI_II_SUS = 600.0
 DIARIA_UTI_III_SUS = 700.0
 

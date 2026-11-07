@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import io
 
-from conftest import CABECALHO_MODOS, construir_fmeca
+from conftest import CABECALHO_MODOS, TABELA_OCORRENCIA, construir_fmeca
 
-from fmeca_spares import ler_fmeca
+from fmeca_spares import ParametrosOcorrencia, decidir, escala_do_formulario, ler_fmeca
 from fmeca_spares.leitura import (
     NATUREZA_CONSUMIVEL,
     NATUREZA_PECA,
@@ -75,7 +75,7 @@ def test_colunas_localizadas_por_nome_nao_por_posicao():
         componentes=[(1, "Peça A", "Pneumático", "Função A", "Peça", 60, 20, 15)],
         modos=[(1, "1.1", "Peça A", "Pneumático", "Modo A1", 4, 5, 3, 60, 20)],
     )
-    # insere uma coluna "Fontes" antes de RPN, como na versao antiga do formulario
+    # insere uma coluna "Fontes" antes de RPN
     import openpyxl
 
     wb = openpyxl.load_workbook(wb_bytes)
@@ -278,11 +278,7 @@ def _com_coluna_extra(titulo: str, antes_de: int):
 
 
 def test_coluna_que_comeca_com_o_nao_rouba_a_nota_de_ocorrencia():
-    """
-    Regressao: por prefixo, "Observações" casava com o alvo "o" e levava a
-    coluna da Ocorrencia, que passava a ser lida como vazia — sem erro, so um
-    aviso, e o componente seguia sem taxa de falha nem exposicao anual.
-    """
+    """Por prefixo, "Observações" casaria com o alvo "o" da Ocorrencia."""
     fmeca = ler_fmeca(_com_coluna_extra("Observações", COL_O))
     assert fmeca.validacao.ok
     modo = fmeca.modos[0]
@@ -332,3 +328,63 @@ def test_falta_de_coluna_de_nota_e_erro_bloqueante():
     fmeca = ler_fmeca(saida)
     assert not fmeca.validacao.ok
     assert any("coluna de nota O" in e for e in fmeca.validacao.erros)
+
+
+# -- escala de Ocorrencia (aba Tabela) --------------------------------------
+
+_COMP = [(1, "Peça A", "Pneumático", "F", "Peça", 135, 45, 30)]
+_MODO = [(1, "1.1", "Peça A", "Pneumático", "Modo A1", 9, 5, 3, 135, 45)]
+
+
+def _com_tabela(tabela):
+    return ler_fmeca(construir_fmeca(componentes=_COMP, modos=_MODO, tabela=tabela))
+
+
+def test_escala_de_ocorrencia_lida_da_aba_tabela():
+    fmeca = _com_tabela(TABELA_OCORRENCIA)
+    assert fmeca.escala_ocorrencia == (
+        (1, 2, 0.0, 0.5),
+        (3, 4, 0.5, 0.9),
+        (5, 6, 1.0, 1.9),
+        (7, 8, 2.0, 3.9),
+        (9, 10, 4.0, 4.0),
+    )
+    assert fmeca.validacao.avisos == []
+
+
+def test_escala_alterada_na_tabela_muda_a_taxa_de_falha():
+    tabela = [list(l) for l in TABELA_OCORRENCIA]
+    tabela[5][1] = "Falha frequente: λ entre 2,0 e 5,0 falha/ano"
+    tabela[6][1] = "Falha muito frequente: λ acima de 5 falhas/ano"
+    fmeca = _com_tabela(tabela)
+    assert fmeca.escala_ocorrencia[-1] == (9, 10, 5.0, 5.0)
+    escala = escala_do_formulario(fmeca)
+    assert escala.taxa_anual(9) == 5.0
+    d = decidir(fmeca)[0]
+    assert d.taxa_falha_anual == 5.0
+
+
+def test_sem_aba_tabela_usa_escala_padrao_com_aviso():
+    fmeca = _com_tabela(None)
+    assert fmeca.escala_ocorrencia is None
+    assert any("Tabela" in a and "padrão" in a for a in fmeca.validacao.avisos)
+    assert escala_do_formulario(fmeca).faixas == ParametrosOcorrencia().faixas
+
+
+def test_taxa_ilegivel_usa_escala_padrao_com_aviso():
+    tabela = [list(l) for l in TABELA_OCORRENCIA]
+    tabela[4][1] = "Falha ocasional"
+    fmeca = _com_tabela(tabela)
+    assert fmeca.escala_ocorrencia is None
+    assert any("nota 5–6" in a for a in fmeca.validacao.avisos)
+
+
+def test_escala_com_lacuna_usa_escala_padrao_com_aviso():
+    tabela = [l for i, l in enumerate(TABELA_OCORRENCIA) if i != 4]
+    fmeca = _com_tabela(tabela)
+    assert fmeca.escala_ocorrencia is None
+    assert any("1 a 10" in a for a in fmeca.validacao.avisos)
+
+
+def test_estudo_de_caso_le_a_escala_da_tabela(fmeca_caso):
+    assert fmeca_caso.escala_ocorrencia == ParametrosOcorrencia().faixas

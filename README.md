@@ -88,14 +88,9 @@ parada, apenas ressuprimento programado; e lead time longo sustenta o estoque
 de segurança sozinho a partir da faixa média de Criticidade, porque mais de um
 mês de equipamento indisponível não se recupera com pedido de compra.
 
-**Piso de demanda programada.** Componentes com `Natureza` = Consumível na
-«Matriz de componentes» nunca caem em compra sob demanda. A demanda deles é
-determinada pelo calendário de troca, não pela ocorrência de falha, e por isso
-eles pontuam Ocorrência baixa em qualquer base de notificação de falha. Sem
-esse piso, o modelo os subdimensionaria. O piso pode ser desligado em
-`ParametrosZona(piso_ponto_pedido_demanda_programada=False)`. Peças trocadas
-por intervalo da manutenção preventiva (célula de O₂, o-rings) só recebem o
-piso se forem marcadas como Consumível no formulário.
+**Consumíveis.** Componentes com `Natureza` = Consumível seguem a mesma matriz
+das peças: a zona sai só da Criticidade e do lead time. A Natureza é lida e
+exibida, mas não altera a decisão.
 
 ---
 
@@ -161,54 +156,44 @@ FMECA.
 | Nota de Ocorrência | λ declarado na escala (falha/ano por unidade) |
 | --- | --- |
 | 1–2 | abaixo de 0,5 |
-| 3–4 | 0,5 a 1,0 |
-| 5–6 | 1,0 a 1,5 |
-| 7–8 | 1,5 a 3,0 |
-| 9–10 | acima de 3,0 |
+| 3–4 | 0,5 a 0,9 |
+| 5–6 | 1,0 a 1,9 |
+| 7–8 | 2,0 a 3,9 |
+| 9–10 | acima de 4,0 |
 
 A faixa aberta embaixo recebe piso 0, limite natural de uma taxa. A faixa
 aberta em cima (O 9–10) não tem teto na escala e é tomada no próprio piso,
-λ = 3,0: a leitura conservadora, que subestima a exposição desses componentes
-em vez de supor um teto que a escala não declara. Os valores estão em
-`ParametrosOcorrencia.faixas`. O parâmetro `posicao_na_faixa` escolhe onde,
-dentro das faixas fechadas, o valor é tomado — 0 no piso, 0,5 no meio, 1 no
-teto. Rodar o modelo nos dois extremos dá o intervalo de custo compatível com
-a *mesma* pontuação de FMECA, o que é mais honesto do que apresentar um número
-único.
+λ = 4,0: a leitura conservadora, que subestima a exposição desses componentes
+em vez de supor um teto que a escala não declara.
+
+As faixas são **lidas da aba «Tabela»** do formulário, na seção de Ocorrência:
+uma linha por faixa de notas ("1–2", "3–4"…), com a taxa no texto da
+descrição ("abaixo de 0,5", "entre 0,5 e 0,9", "acima de 4,0"). Alterar a
+escala na planilha altera o cálculo. Se a aba não existir, se alguma taxa não
+puder ser lida ou se as faixas não cobrirem as notas de 1 a 10 sem lacunas, o
+modelo usa a escala padrão (`ParametrosOcorrencia.faixas`, a da tabela acima)
+e a conferência registra um aviso. A interface mostra a escala em uso, e a aba
+«Parâmetros» da planilha exportada registra a origem dela.
+
+Dentro de cada faixa, a interface oferece dois valores de λ: a **média** da
+faixa (padrão) ou o **teto**, cenário mais desfavorável. Rodar o modelo nos
+dois dá o intervalo de custo compatível com a *mesma* pontuação de FMECA. No
+módulo, `posicao_na_faixa` aceita qualquer valor de 0 (piso) a 1 (teto).
 
 ---
 
-## Plano de ação (Detecção e RPN)
+## Falha oculta (Detecção)
 
-A Detecção fica fora da decisão de estoque, mas não fica fora do app. O plano
-de ação responde a outra pergunta — *além de estocar, o que fazer?* — e não
-reclassifica nenhum componente.
+A Detecção fica fora da decisão de estoque e não reclassifica nenhum
+componente. Ela só marca os modos de falha oculta: pela escala de Detecção da
+aba «Tabela» do formulário, a partir de D = 7 a falha só aparece no uso
+crítico, ou só é percebida pela consequência.
 
-Cada modo de falha recebe uma ação pela nota D, conforme a escala de Detecção
-da aba «Tabela» do formulário:
-
-| D | Leitura da escala | Ação recomendada |
-| --- | --- | --- |
-| 1–4 | alarme automático ou checagem de rotina | Detecção adequada |
-| 5–6 | depende de inspeção periódica ou preventiva | Manter o intervalo da preventiva |
-| 7–10 | falha oculta até o uso crítico, ou só percebida pela consequência | Incluir teste funcional na preventiva |
-
-**Por que a falha oculta pede teste, não só estoque.** A peça na prateleira
-encurta o reparo, mas não antecipa a descoberta da falha: com D alto, ela só
-aparece no uso crítico, com o paciente conectado. A justificativa de cada
-componente com modo de falha oculta traz esse alerta.
-
-**Alerta.** Um modo com Severidade a partir de 9 e Detecção oculta, num
-componente fora do estoque de segurança, é sinalizado. É o caso que a
-Criticidade subestima: falha catastrófica, rara e oculta, que a Ocorrência
-baixa deixa na faixa média de S × O. No estudo de caso, são os modos 20.1 e
-22.1 (S = 10, O = 3, D = 7 e 8, Criticidade 30, ponto de pedido).
-
-O app mostra o plano numa aba própria, com os modos ordenados por alerta e por
-RPN e a coluna «Detecção atual» do formulário, e num gráfico Criticidade ×
-Detecção com a faixa das falhas ocultas destacada. A planilha exportada traz a
-aba «Plano de ação». Os três limiares (D oculta = 7, D preventiva = 5,
-S de alerta = 9) são ajustáveis na interface e em `ParametrosDeteccao`.
+A peça na prateleira encurta o reparo, mas não antecipa a descoberta da
+falha. Por isso, a justificativa de cada componente com modo de falha oculta
+traz um alerta. O app mostra ainda um gráfico Criticidade × Detecção com a
+faixa das falhas ocultas destacada. O limiar (D oculta = 7) é ajustável na
+interface e em `ParametrosDeteccao`.
 
 ---
 
@@ -292,8 +277,8 @@ isso de forma explícita.
 fmeca_spares/
   parametros.py    faixas, limiares, custo de leito bloqueado e Detecção, com validação
   leitura.py       leitura e conferência do formulário FMECA
-  modelo.py        Downtime Cost, matriz de zonas, decisão por componente e plano de ação
-  exportacao.py    planilha de resultado, resumo, plano de ação, parâmetros e validação
+  modelo.py        Downtime Cost, matriz de zonas, decisão por componente
+  exportacao.py    planilha de resultado, resumo, parâmetros e validação
 app.py             interface Streamlit
 dados/             formulário FMECA do estudo de caso
 tests/             suíte pytest
@@ -308,7 +293,7 @@ pytest
 
 A suíte cobre os utilitários de leitura, a aritmética do FMECA, os limites das
 faixas, o cálculo do Downtime Cost, as nove células da
-matriz de zonas, a monotonicidade da matriz, o piso de demanda programada e a
+matriz de zonas, a monotonicidade da matriz e a
 exportação. Inclui testes de regressão sobre o estudo de caso: se os limiares
 padrão ou a planilha de demonstração mudarem, eles falham, o que obriga a
 mudança a ser deliberada.

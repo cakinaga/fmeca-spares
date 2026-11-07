@@ -46,13 +46,31 @@ CABECALHO_MODOS = [
 ]
 
 
-def construir_fmeca(componentes, modos, com_titulo: bool = True) -> io.BytesIO:
+# Secao de Ocorrencia da aba Tabela, no formato do formulario do estudo de caso.
+TABELA_OCORRENCIA = [
+    ("Ocorrência (O) — frequência da falha",),
+    ("Nota", "Descrição / faixa - Taxa de falha por unidade"),
+    ("1–2", "Falha muito rara: λ abaixo de 0,5 falha/ano por unidade"),
+    ("3–4", "Falha rara: λ entre 0,5 e 0,9 falha/ano por unidade"),
+    ("5–6", "Falha ocasional: λ entre 1,0 e 1,9 falha/ano por unidade"),
+    ("7–8", "Falha frequente: λ entre 2,0 e 3,9 falha/ano por unidade"),
+    ("9–10", "Falha muito frequente: λ acima de 4,0 falha/ano por unidade"),
+    ("Detecção (D) — capacidade de detectar antes do efeito",),
+    ("Nota", "Descrição / faixa"),
+    ("1–2", "Detecção quase certa."),
+]
+
+
+def construir_fmeca(
+    componentes, modos, com_titulo: bool = True, tabela=TABELA_OCORRENCIA
+) -> io.BytesIO:
     """
     Monta um formulario FMECA minimo em memoria.
 
     `componentes`: lista de tuplas
         (id, nome, subsistema, funcao, natureza, rpn, crit, lead_time)
     `modos`: lista de tuplas (id, sub_id, componente, subsistema, modo, O, S, D, rpn, crit)
+    `tabela`: linhas da aba Tabela, a partir da coluna B; None omite a aba.
     """
     wb = Workbook()
 
@@ -86,6 +104,12 @@ def construir_fmeca(componentes, modos, com_titulo: bool = True) -> io.BytesIO:
         valores = [ident, sub_id, comp, sub, modo, None, None, None, None, None, o, s, d, rpn, crit]
         for col, valor in enumerate(valores, start=1):
             wm.cell(i, col, valor)
+
+    if tabela is not None:
+        wt = wb.create_sheet("Tabela")
+        for i, dados in enumerate(tabela, start=2):
+            for col, valor in enumerate(dados, start=2):
+                wt.cell(i, col, valor)
 
     buffer = io.BytesIO()
     wb.save(buffer)

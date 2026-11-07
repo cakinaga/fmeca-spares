@@ -5,12 +5,12 @@ Rodar com:
     streamlit run app.py
 
 Todo o calculo vive no pacote fmeca_spares; esta tela apenas coleta
-parametros, exibe e exporta. Isso mantem o modulo de calculo utilizavel sem
-Streamlit, por quem quiser importa-lo em um script ou em outra interface.
+parametros, exibe e exporta.
 """
 
 from __future__ import annotations
 
+import html
 from pathlib import Path
 
 import altair as alt
@@ -20,16 +20,15 @@ import streamlit as st
 from fmeca_spares import (
     DIARIA_UTI_II_SUS,
     DIARIA_UTI_III_SUS,
-    AcaoDeteccao,
     ParametrosCusto,
     ParametrosDeteccao,
     ParametrosOcorrencia,
     ParametrosZona,
     Zona,
     decidir,
+    escala_do_formulario,
     ler_fmeca,
     ordenar_para_relatorio,
-    plano_de_acao,
     resumo_por_zona,
 )
 from fmeca_spares.leitura import RelatorioValidacao
@@ -46,7 +45,27 @@ COR_ZONA = {
     Zona.PONTO_PEDIDO: "#d4a017",
     Zona.SOB_DEMANDA: "#4a7c59",
 }
+# Tamanhos de fonte que o tema (.streamlit/config.toml) nao permite definir:
+# texto da barra lateral e valores do painel-resumo.
+CSS_BARRA_LATERAL = """<style>
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] :is(p, li, td, th),
+[data-testid="stSidebar"] input {
+    font-size: 13px;
+}
+[data-testid="stSidebar"] [data-testid="stCaptionContainer"],
+[data-testid="stSidebar"] [data-testid="stCaptionContainer"] :is(p, li) {
+    font-size: calc(0.875rem - 5px);
+}
+[data-testid="stMetricValue"] > * {
+    font-size: calc(1em - 1px);
+}
+</style>"""
+
 COR_SEM_ZONA = "#888888"
+COR_EQUIPAMENTO = "#2e6da4"
+
+# Posicao na faixa de lambda oferecida na interface: media ou teto do intervalo
+POSICOES_LAMBDA = {0.5: "Média da faixa", 1.0: "Teto da faixa"}
 SEM_ZONA = "Sem zona atribuída"
 
 st.set_page_config(
@@ -99,10 +118,19 @@ def _parametros_zona() -> ParametrosZona:
             max_value=100,
             value=(20, 40),
             help=(
-                "Primeiro valor: piso da faixa média. Segundo: piso da faixa alta. "
-                "O padrão 40 é o menor S × O que combina perda de função crítica "
-                "(S = 8) com falha ao menos ocasional (O = 5)."
+                "**Primeiro valor: piso da faixa média.** A falha pesa em um dos "
+                "critérios: é grave e rara ou sem risco e frequente . Padrão 20 = "
+                "S 10 × O 2 ou S 4 × O 5.\n\n"
+                "**Segundo valor: piso da faixa alta.** A falha pesa nos dois "
+                "critérios: compromete função essencial e é pelo menos ocasional. "
+                "Padrão 40 = S 8 × O 5 ou S 10 × O 4.\n\n"
+                "Use o produto das notas S e O que marcam o início de cada faixa "
+                "nas escalas do formulário."
             ),
+        )
+        st.caption(
+            f"Baixa: abaixo de {media}  ·  Média: de {media} a {max(alta, media + 1) - 1}"
+            f"  ·  Alta: a partir de {max(alta, media + 1)}"
         )
     with st.sidebar.expander("Lead time (dias)", expanded=False):
         curto, longo = st.slider(
@@ -111,18 +139,19 @@ def _parametros_zona() -> ParametrosZona:
             max_value=180,
             value=(7, 30),
             help=(
-                "Primeiro valor: teto da faixa curta. Segundo: piso da faixa longa. "
-                "O padrão 7 corresponde a fornecimento nacional; acima de 30 dias, "
-                "a importação sem representação consolidada."
+                "**Primeiro valor: teto da faixa curta.** Até ele, a peça chega a "
+                "tempo de o equipamento voltar logo à operação. Padrão de 7 dias: "
+                "fornecedor nacional ou pronta entrega.\n\n"
+                "**Segundo valor: teto da faixa média.** Acima dele, a espera é "
+                "longa demais para comprar só depois da falha. Padrão de 30 dias: "
+                "importação sem representação no país.\n\n"
+                "Use os prazos reais de entrega dos fornecedores, do pedido até a "
+                "peça disponível."
             ),
         )
-        piso = st.checkbox(
-            "Piso de ponto de pedido para demanda programada",
-            value=True,
-            help=(
-                "Consumíveis não caem em compra sob demanda: a demanda deles vem "
-                "do intervalo de troca, não da falha."
-            ),
+        st.caption(
+            f"Curto: até {curto} dias  ·  Médio: acima de {curto} até "
+            f"{max(longo, curto + 1)} dias  ·  Longo: acima de {max(longo, curto + 1)} dias"
         )
 
     if media >= alta:
@@ -135,51 +164,34 @@ def _parametros_zona() -> ParametrosZona:
         criticidade_media=int(media),
         lead_time_curto_dias=float(curto),
         lead_time_longo_dias=float(longo),
-        piso_ponto_pedido_demanda_programada=piso,
     )
 
 
 def _parametros_deteccao() -> ParametrosDeteccao:
-    st.sidebar.header("Plano de ação")
-    with st.sidebar.expander("Detecção (D)", expanded=False):
-        preventiva, oculta = st.slider(
-            "Faixas de Detecção",
+    st.sidebar.header("Detecção")
+    with st.sidebar.expander("Falha oculta (D)", expanded=False):
+        oculta = st.slider(
+            "D a partir da qual a falha é oculta",
             min_value=1,
             max_value=10,
-            value=(5, 7),
+            value=7,
             help=(
-                "Primeiro valor: D a partir da qual a detecção depende da "
-                "preventiva. Segundo: D a partir da qual a falha é oculta até o "
-                "uso crítico. Os padrões seguem a escala de Detecção da aba "
-                "«Tabela». Não alteram a zona de estoque."
-            ),
-        )
-        severidade = st.slider(
-            "Severidade que torna a falha oculta um alerta",
-            min_value=1,
-            max_value=10,
-            value=9,
-            help=(
-                "Falha oculta com S a partir deste valor recebe alerta quando o "
-                "componente não está em estoque de segurança: o risco que a "
-                "Criticidade (S × O) subestima, por ignorar a Detecção."
+                "A partir deste valor a falha só aparece no uso crítico, e o "
+                "modo é sinalizado na justificativa do componente. O padrão "
+                "segue a escala de Detecção da aba «Tabela». Não altera a zona "
+                "de estoque."
             ),
         )
 
-    if preventiva >= oculta:
-        if oculta < 10:
-            oculta = preventiva + 1
-        else:
-            preventiva = oculta - 1
-
-    return ParametrosDeteccao(
-        limiar_oculta=int(oculta),
-        limiar_preventiva=int(preventiva),
-        severidade_alerta=int(severidade),
-    )
+    return ParametrosDeteccao(limiar_oculta=int(oculta))
 
 
-def _parametros_custo() -> tuple[ParametrosCusto, ParametrosOcorrencia]:
+def _parametros_custo():
+    """
+    Devolve o custo, a escala de Ocorrência (só com a posição na faixa) e o
+    espaço da barra lateral onde a tabela de λ é desenhada depois da leitura
+    do formulário, de onde vêm as faixas.
+    """
     st.sidebar.header("Custo de indisponibilidade")
     with st.sidebar.expander("Custo de leito bloqueado", expanded=False):
         leito = st.number_input(
@@ -195,11 +207,6 @@ def _parametros_custo() -> tuple[ParametrosCusto, ParametrosOcorrencia]:
                 "deixa de faturar por dia de leito bloqueado."
             ),
         )
-        st.caption(
-            "Valores de 2022: confira a tabela SIGTAP vigente antes de citar. A "
-            "diária do SUS fica abaixo do custo operacional efetivo de um leito "
-            "de UTI, então é a escolha conservadora."
-        )
 
     st.sidebar.header("Frota")
     with st.sidebar.expander("Equipamentos em operação", expanded=False):
@@ -208,26 +215,30 @@ def _parametros_custo() -> tuple[ParametrosCusto, ParametrosOcorrencia]:
         )
 
     st.sidebar.header("Escala de Ocorrência")
-    with st.sidebar.expander("Taxa de falha por nota", expanded=False):
-        posicao = st.slider(
-            "Posição tomada dentro da faixa de λ",
-            min_value=0.0,
-            max_value=1.0,
-            value=0.5,
-            step=0.05,
+    with st.sidebar.expander("Taxa de falha (λ)", expanded=False):
+        posicao = st.radio(
+            "Valor de λ tomado em cada faixa",
+            options=list(POSICOES_LAMBDA),
+            format_func=POSICOES_LAMBDA.get,
+            horizontal=True,
             help=(
-                "A escala de Ocorrência do formulário define cada par de notas por "
-                "um intervalo de taxa de falha anual. 0 toma o piso do intervalo, "
-                "1 o teto. Rodar nos dois extremos dá o intervalo de custo "
-                "compatível com a mesma pontuação de FMECA."
+                "Cada nota de Ocorrência corresponde a um intervalo de taxa de "
+                "falha anual na aba «Tabela» do formulário. O cálculo precisa de "
+                "um valor só: a média ou o teto do intervalo."
             ),
         )
+        st.caption(
+            "**Média**: ponto central da faixa, estimativa típica.  \n"
+            "**Teto**: limite superior da faixa, cenário mais desfavorável, "
+            "que dá a maior exposição anual compatível com as notas do FMECA."
+        )
+        area_escala = st.container()
 
     custo = ParametrosCusto(
         custo_leito_dia=float(leito),
         frota_equipamentos=int(frota),
     )
-    return custo, ParametrosOcorrencia(posicao_na_faixa=float(posicao))
+    return custo, ParametrosOcorrencia(posicao_na_faixa=float(posicao)), area_escala
 
 
 # --------------------------------------------------------------------------
@@ -238,6 +249,75 @@ def _reais(valor: float | None) -> str:
     if valor is None:
         return "—"
     return "R$ " + f"{valor:,.2f}".replace(",", "~").replace(".", ",").replace("~", ".")
+
+
+def _num(valor: float, casas: int | None = None) -> str:
+    """Decimal com virgula. Sem `casas`: ate duas, e ao menos uma."""
+    if casas is not None:
+        return f"{valor:.{casas}f}".replace(".", ",")
+    texto = f"{valor:.2f}".rstrip("0")
+    return (texto + "0" if texto.endswith(".") else texto).replace(".", ",")
+
+
+def _tabela_escala(area, fmeca, escala: ParametrosOcorrencia) -> None:
+    """Tabela da escala de Ocorrência -> λ na barra lateral."""
+    lida = fmeca is not None and fmeca.escala_ocorrencia is not None
+    linhas = [
+        "| Nota O | Faixa | λ usado |",
+        "|:---:|:---:|:---:|",
+    ]
+    for minimo, maximo, piso, teto in escala.faixas:
+        faixa = f"≥ {_num(piso)}" if piso == teto else f"{_num(piso)} a {_num(teto)}"
+        usado = escala.taxa_anual(minimo)
+        linhas.append(f"| {minimo}–{maximo} | {faixa} | {_num(usado, 2)} |")
+
+    with area:
+        if fmeca is not None and not lida:
+            st.warning(
+                "A escala da aba «Tabela» não pôde ser usada; vale a escala "
+                "padrão. O motivo está nos avisos da conferência."
+            )
+        st.markdown("\n".join(linhas))
+        st.caption(
+            "Falhas por ano por equipamento. "
+            + ("Escala lida da aba «Tabela» do formulário. " if lida else "Escala padrão do modelo. ")
+            + "A faixa aberta (≥) é fixada no piso."
+        )
+
+
+def _cartao_equipamento(fmeca) -> None:
+    """Identificação do equipamento analisado, em destaque acima do resultado."""
+    data = fmeca.data_analise
+    if hasattr(data, "strftime"):
+        data = data.strftime("%d/%m/%Y")
+    campos = [
+        ("Modelo", fmeca.modelo),
+        ("Fabricante", fmeca.fabricante),
+        ("Setor", fmeca.setor),
+        ("Data da análise", data),
+    ]
+    itens = "".join(
+        f"""<div style="margin-right:2.2rem">
+            <div style="font-size:.72rem;text-transform:uppercase;
+                        letter-spacing:.04em;opacity:.65">{rotulo}</div>
+            <div style="font-size:1rem;font-weight:600">{html.escape(str(valor))}</div>
+        </div>"""
+        for rotulo, valor in campos
+        if valor
+    )
+    nome = html.escape(fmeca.equipamento or fmeca.identificacao)
+    st.markdown(
+        f"""<div style="border-left:5px solid {COR_EQUIPAMENTO};
+                background:rgba(128,128,128,.08);border-radius:6px;
+                padding:.9rem 1.2rem;margin:.4rem 0 1rem;
+                width:fit-content;max-width:100%">
+            <div style="font-size:.72rem;text-transform:uppercase;
+                        letter-spacing:.04em;opacity:.65">Equipamento analisado</div>
+            <div style="font-size:24px;font-weight:700;margin:.1rem 0 .6rem">{nome}</div>
+            <div style="display:flex;flex-wrap:wrap;row-gap:.6rem">{itens}</div>
+        </div>""",
+        unsafe_allow_html=True,
+    )
 
 
 def _mostrar_erros(validacao: RelatorioValidacao) -> bool:
@@ -261,8 +341,15 @@ def _mostrar_avisos(validacao: RelatorioValidacao) -> None:
         ):
             for msg in validacao.avisos:
                 st.markdown(f"- {msg}")
-    else:
-        st.success("Conferência dos dados sem nenhuma inconsistência.")
+
+
+def _rodape(validacao: RelatorioValidacao) -> None:
+    st.divider()
+    if not validacao.avisos:
+        st.caption(
+            ":green[:material/check_circle:] Conferência dos dados sem nenhuma "
+            "inconsistência."
+        )
 
 
 def _painel_resumo(decisoes, custo: ParametrosCusto) -> None:
@@ -326,20 +413,13 @@ def _grade_zonas(decisoes, zonas: ParametrosZona) -> None:
                 if d.faixa_criticidade is fc and d.faixa_lead_time is fl
             ]
             ids = ", ".join(str(d.id) for d in sorted(itens, key=lambda x: x.id)) or "—"
-            ajustados = [d for d in itens if d.piso_demanda_programada_aplicado]
-            nota = (
-                f"<br><span style='font-size:0.72rem;opacity:.75'>"
-                f"{len(ajustados)} com piso de demanda programada</span>"
-                if ajustados
-                else ""
-            )
             col.markdown(
                 f"""<div style="border-left:4px solid {COR_ZONA[zona]};
                         background:rgba(128,128,128,.07);
                         padding:.55rem .7rem;border-radius:4px;min-height:5.2rem">
                 <div style="font-weight:600;font-size:.82rem">{zona.rotulo}</div>
                 <div style="font-size:.78rem;opacity:.85;margin-top:.25rem">
-                IDs {ids}</div>{nota}</div>""",
+                IDs {ids}</div></div>""",
                 unsafe_allow_html=True,
             )
 
@@ -430,64 +510,37 @@ def _tabela(decisoes, custo: ParametrosCusto) -> None:
     df = pd.DataFrame(linhas)
     if not custo.declarado:
         df = df.drop(columns=["DC por evento (R$)", "DC anual (R$)"])
-    st.dataframe(df, hide_index=True)
-
-
-def _plano(fmeca, decisoes, deteccao: ParametrosDeteccao) -> None:
-    st.subheader("Plano de ação")
-    st.caption(
-        "Além de estocar, o que fazer? A zona de estoque vem da Criticidade "
-        "(S × O); esta aba lê a Detecção e o RPN de cada modo de falha para "
-        "recomendar a ação de manutenção que o estoque não substitui."
+    frota = custo.frota_equipamentos
+    ajuda_evento = (
+        "Custo da espera pela peça em uma falha.\n\n"
+        "**Lead time (dias) × custo de leito bloqueado** "
+        f"({_reais(custo.custo_leito_dia)}/dia)."
     )
-    plano = plano_de_acao(fmeca, decisoes, deteccao)
-    ocultos = [a for a in plano if a.acao is AcaoDeteccao.TESTE_FUNCIONAL]
-    alertas = [a for a in plano if a.alerta]
-
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Modos de falha oculta", f"{len(ocultos)} de {len(plano)}",
-              f"D ≥ {deteccao.limiar_oculta}", delta_color="off")
-    c2.metric("Componentes afetados",
-              len({a.modo.id_componente for a in ocultos}), delta_color="off")
-    c3.metric("Alertas", len(alertas),
-              f"S ≥ {deteccao.severidade_alerta}, fora do estoque de segurança",
-              delta_color="off")
-
-    if alertas:
-        itens = "\n".join(
-            f"- **{a.modo.sub_id} — {a.modo.modo}** "
-            f"({a.componente.nome if a.componente else a.modo.componente}): "
-            f"S={a.modo.severidade}, D={a.modo.deteccao_nota}, RPN {a.rpn}, "
-            f"Criticidade {a.criticidade} · {a.zona.rotulo if a.zona else SEM_ZONA}"
-            for a in alertas
-        )
-        st.warning(
-            "**Falha catastrófica e oculta fora do estoque de segurança.** A "
-            "Criticidade subestima estes modos porque a Ocorrência é baixa e a "
-            "Detecção não entra no S × O. Reveja a decisão de estoque e inclua "
-            "teste funcional na preventiva.\n\n" + itens
-        )
-
-    df = pd.DataFrame(
-        [
-            {
-                "Alerta": "⚠️" if a.alerta else "",
-                "Sub ID": a.modo.sub_id,
-                "Componente": a.componente.nome if a.componente else a.modo.componente,
-                "Modo de falha": a.modo.modo,
-                "S": a.modo.severidade,
-                "O": a.modo.ocorrencia,
-                "D": a.modo.deteccao_nota,
-                "RPN": a.rpn,
-                "Criticidade": a.criticidade,
-                "Zona do componente": a.zona.rotulo if a.zona else SEM_ZONA,
-                "Detecção atual": a.modo.deteccao,
-                "Ação recomendada": a.acao.rotulo if a.acao else "—",
-            }
-            for a in plano
-        ]
+    ajuda_anual = (
+        "Exposição anual da unidade à falta da peça.\n\n"
+        "**DC por evento × λ (falha/ano) × frota** "
+        f"({frota} equipamento{'s' if frota != 1 else ''})."
     )
-    st.dataframe(df, hide_index=True)
+    if custo.declarado:
+        with st.container(horizontal=True, gap="large"):
+            st.caption("**DC por evento (R$)**", help=ajuda_evento, width="content")
+            st.caption("**DC anual (R$)**", help=ajuda_anual, width="content")
+    # Formato brasileiro via Styler; a ordenação segue o valor numérico. Toda
+    # coluna numérica precisa de formato, senão o Styler mostra seis casas.
+    formatos = {
+        "S": "{:.0f}",
+        "O": "{:.0f}",
+        "Criticidade": "{:.0f}",
+        "RPN": "{:.0f}",
+        "Lead time (dias)": lambda v: f"{v:g}".replace(".", ","),
+        "λ (falha/ano)": lambda v: _num(v, 2),
+        "DC por evento (R$)": _reais,
+        "DC anual (R$)": _reais,
+    }
+    tabela = df.style.format(
+        {c: f for c, f in formatos.items() if c in df.columns}, na_rep="—"
+    )
+    st.dataframe(tabela, hide_index=True)
 
 
 def _criticidade_deteccao(fmeca, decisoes, zonas: ParametrosZona,
@@ -496,26 +549,28 @@ def _criticidade_deteccao(fmeca, decisoes, zonas: ParametrosZona,
     st.caption(
         "Um ponto por modo de falha. A faixa sombreada reúne as falhas ocultas "
         f"(D ≥ {deteccao.limiar_oculta}): nelas o estoque encurta o reparo, mas "
-        "não antecipa a descoberta da falha. Pontos com contorno preto são "
-        "alertas. O tamanho é o RPN."
+        "não antecipa a descoberta da falha. O tamanho é o RPN."
     )
-    linhas = [
-        {
-            "SubID": a.modo.sub_id,
-            "Modo": a.modo.modo or "—",
-            "Componente": a.componente.nome if a.componente else (a.modo.componente or "—"),
-            "Criticidade": a.criticidade,
-            "D": a.modo.deteccao_nota,
-            "S": a.modo.severidade,
-            "O": a.modo.ocorrencia,
-            "RPN": a.rpn,
-            "Zona": a.zona.rotulo if a.zona else SEM_ZONA,
-            "Acao": a.acao.rotulo if a.acao else "—",
-            "Alerta": "sim" if a.alerta else "não",
-        }
-        for a in plano_de_acao(fmeca, decisoes, deteccao)
-        if a.criticidade is not None and a.modo.deteccao_nota is not None
-    ]
+    zona_de = {d.id: d.zona for d in decisoes}
+    linhas = []
+    for m in fmeca.modos:
+        if m.criticidade_calculada is None or m.deteccao_nota is None:
+            continue
+        comp = fmeca.componente(m.id_componente)
+        zona = zona_de.get(m.id_componente)
+        linhas.append(
+            {
+                "SubID": m.sub_id,
+                "Modo": m.modo or "—",
+                "Componente": comp.nome if comp else (m.componente or "—"),
+                "Criticidade": m.criticidade_calculada,
+                "D": m.deteccao_nota,
+                "S": m.severidade,
+                "O": m.ocorrencia,
+                "RPN": m.rpn_calculado,
+                "Zona": zona.rotulo if zona else SEM_ZONA,
+            }
+        )
     if not linhas:
         st.info("Nenhum modo de falha tem S, O e D pontuados.")
         return
@@ -538,7 +593,7 @@ def _criticidade_deteccao(fmeca, decisoes, zonas: ParametrosZona,
     )
     pontos = (
         alt.Chart(df)
-        .mark_circle(opacity=0.85)
+        .mark_circle(opacity=0.85, stroke="white", strokeWidth=1)
         .encode(
             x=alt.X("Criticidade:Q", title="Criticidade (S × O)", scale=alt.Scale(domain=[0, 100])),
             y=alt.Y("D:Q", title="Detecção (D)", scale=alt.Scale(domain=[0.5, 10.5]),
@@ -547,8 +602,6 @@ def _criticidade_deteccao(fmeca, decisoes, zonas: ParametrosZona,
                             legend=alt.Legend(title="Zona do componente", orient="bottom")),
             size=alt.Size("RPN:Q", scale=alt.Scale(range=[40, 700]),
                           legend=alt.Legend(title="RPN", orient="bottom")),
-            stroke=alt.condition(alt.datum.Alerta == "sim", alt.value("black"), alt.value("white")),
-            strokeWidth=alt.condition(alt.datum.Alerta == "sim", alt.value(2.5), alt.value(1)),
             tooltip=[
                 alt.Tooltip("SubID:N", title="Sub ID"),
                 alt.Tooltip("Modo:N", title="Modo de falha"),
@@ -556,8 +609,6 @@ def _criticidade_deteccao(fmeca, decisoes, zonas: ParametrosZona,
                 alt.Tooltip("S:Q"), alt.Tooltip("O:Q"), alt.Tooltip("D:Q"),
                 alt.Tooltip("Criticidade:Q"), alt.Tooltip("RPN:Q"),
                 alt.Tooltip("Zona:N"),
-                alt.Tooltip("Acao:N", title="Ação recomendada"),
-                alt.Tooltip("Alerta:N"),
             ],
         )
     )
@@ -587,32 +638,40 @@ def _detalhe(decisoes) -> None:
 # --------------------------------------------------------------------------
 
 def main() -> None:
+    st.html(CSS_BARRA_LATERAL)
     st.title("Estoque de spare parts na Engenharia Clínica")
     st.caption(
-        "Etapa 2 da estrutura metodológica: decisão de estoque por componente, "
-        "do cruzamento entre a Criticidade do FMECA e o lead time de fornecimento, "
-        "com o Downtime Cost como grandeza de apoio."
+        "Etapa 2 da estrutura metodológica. Para cada componente, indica se a "
+        "peça de reposição deve ficar em estoque de segurança, ser ressuprida "
+        "por ponto de pedido ou comprada sob demanda. A decisão cruza a "
+        "Criticidade do FMECA (S × O) com o lead time de fornecimento. O "
+        "Downtime Cost estima quanto a falta de cada peça custa por ano, sem "
+        "alterar a decisão."
     )
 
     arquivo_fmeca = _carregar_entradas()
     zonas = _parametros_zona()
-    custo, escala = _parametros_custo()
+    custo, escala, area_escala = _parametros_custo()
     deteccao = _parametros_deteccao()
 
     if arquivo_fmeca is None:
+        _tabela_escala(area_escala, None, escala)
         st.info("Envie o formulário FMECA na barra lateral para começar.")
         return
 
     try:
         fmeca = ler_fmeca(arquivo_fmeca)
     except Exception as exc:  # pragma: no cover
+        _tabela_escala(area_escala, None, escala)
         st.error(f"Não consegui ler o formulário FMECA: {exc}")
         return
 
     validacao = RelatorioValidacao()
     validacao.estender(fmeca.validacao)
+    escala = escala_do_formulario(fmeca, escala)
+    _tabela_escala(area_escala, fmeca, escala)
 
-    st.markdown(f"**{fmeca.identificacao}** · {fmeca.setor or 'setor não informado'}")
+    _cartao_equipamento(fmeca)
 
     if not _mostrar_erros(validacao):
         return
@@ -630,9 +689,9 @@ def main() -> None:
     _painel_resumo(decisoes, custo)
     st.divider()
 
-    aba_matriz, aba_grafico, aba_tabela, aba_plano, aba_deteccao = st.tabs(
+    aba_matriz, aba_grafico, aba_tabela, aba_deteccao = st.tabs(
         ["Matriz de zonas", "Dispersão", "Tabela de decisão",
-         "Plano de ação", "Criticidade × Detecção"]
+         "Criticidade × Detecção"]
     )
     with aba_matriz:
         _grade_zonas(decisoes, zonas)
@@ -640,8 +699,6 @@ def main() -> None:
         _dispersao(decisoes, zonas, custo)
     with aba_tabela:
         _tabela(decisoes, custo)
-    with aba_plano:
-        _plano(fmeca, decisoes, deteccao)
     with aba_deteccao:
         _criticidade_deteccao(fmeca, decisoes, zonas, deteccao)
 
@@ -667,6 +724,7 @@ def main() -> None:
         "A planilha exportada carrega os limiares e o custo de leito bloqueado em "
         "aba própria, para que o resultado possa ser conferido e repetido."
     )
+    _rodape(validacao)
 
 
 if __name__ == "__main__":
