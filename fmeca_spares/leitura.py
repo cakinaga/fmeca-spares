@@ -296,7 +296,7 @@ _COLS_MODOS = {
     "efeito_local": ("efeito local",),
     "efeito_equipamento": ("efeito no equipamento",),
     "efeito_paciente": ("efeito no paciente",),
-    "deteccao": ("deteccao atual",),
+    "deteccao": ("forma de deteccao", "deteccao atual"),
     "ocorrencia": ("o", "ocorrencia"),
     "severidade": ("s", "severidade"),
     "deteccao_nota": ("d", "deteccao"),

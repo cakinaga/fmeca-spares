@@ -435,6 +435,7 @@ def _dispersao(decisoes, zonas: ParametrosZona, custo: ParametrosCusto) -> None:
             "LeadTime": d.lead_time_dias,
             "Zona": d.zona.rotulo,
             "ExposicaoAnual": d.dc_anual_esperado or 0.0,
+            "ExposicaoAnualReais": _reais(d.dc_anual_esperado or 0.0),
             "Natureza": d.componente.natureza or "—",
         }
         for d in decisoes
@@ -473,7 +474,7 @@ def _dispersao(decisoes, zonas: ParametrosZona, custo: ParametrosCusto) -> None:
                 alt.Tooltip("Criticidade:Q"),
                 alt.Tooltip("LeadTime:Q", title="Lead time (dias)"),
                 alt.Tooltip("Zona:N"),
-                alt.Tooltip("ExposicaoAnual:Q", title="Exposição anual (R$)", format=",.0f"),
+                alt.Tooltip("ExposicaoAnualReais:N", title="Exposição anual"),
             ],
         )
     )

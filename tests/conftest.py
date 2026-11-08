@@ -37,7 +37,7 @@ CABECALHO_MODOS = [
     "Efeito local",
     "Efeito no equipamento",
     "Efeito no paciente",
-    "Detecção atual",
+    "Forma de detecção",
     "O",
     "S",
     "D",
