@@ -4,9 +4,11 @@
 sem instalação, com o estudo de caso de demonstração carregado.
 
 Modelo de decisão para estoque de peças de reposição na Engenharia Clínica,
-baseado em FMECA e Downtime Cost. Implementa a **Etapa 2** da estrutura
+baseado em FMECA e lead time. Implementa a **Etapa 2** da estrutura
 metodológica: a decisão de estoque componente a componente, a partir do
-cruzamento entre a Criticidade do FMECA e o lead time de fornecimento.
+cruzamento entre a Criticidade do FMECA e o lead time de fornecimento. O
+Downtime Cost quantifica a exposição anual à falta de cada peça e ordena os
+componentes dentro de cada zona, sem alterar a zona.
 
 O repositório tem duas partes independentes:
 
@@ -77,8 +79,8 @@ O cruzamento das duas faixas produz a matriz de zonas:
 
 |                       | Lead time curto | Lead time médio | Lead time longo |
 | --------------------- | --------------- | --------------- | --------------- |
-| **Criticidade alta**  | Ponto de pedido | Estoque de segurança | Estoque de segurança |
-| **Criticidade média** | Compra sob demanda | Ponto de pedido | Estoque de segurança |
+| **Criticidade alta**  | Ponto de pedido | Estoque de segurança local | Estoque de segurança local |
+| **Criticidade média** | Compra sob demanda | Ponto de pedido | Estoque de segurança local |
 | **Criticidade baixa** | Compra sob demanda | Compra sob demanda | Ponto de pedido |
 
 A matriz é monótona nos dois eixos: subir a Criticidade ou o lead time nunca
@@ -205,7 +207,7 @@ Os valores padrão e sua justificativa. Todos são ajustáveis na interface e em
 | Limiar | Padrão | Por quê |
 | --- | --- | --- |
 | Piso da Criticidade alta | 40 | Menor produto S × O que combina perda de função crítica com ocorrência ao menos ocasional: S = 8 (equipamento retirado de uso, risco potencial ao paciente) com O = 5 (falha ocasional), ou S = 10 com O = 4. |
-| Piso da Criticidade média | 20 | Faixa em que a exposição vem de um eixo isoladamente: severidade crítica com ocorrência rara (S = 10, O = 2) ou severidade moderada com ocorrência frequente (S = 4, O = 5). |
+| Piso da Criticidade média | 20 | Faixa em que a exposição vem de um eixo isoladamente: severidade crítica com ocorrência rara (S = 10, O = 2) ou degradação leve de desempenho com ocorrência ocasional (S = 4, O = 5). |
 | Teto do lead time curto | 7 dias | Fornecimento que devolve o equipamento à operação na mesma semana, compatível com peça nacional ou pronta entrega. |
 | Piso do lead time longo | 30 dias | Acima de um mês de equipamento parado por falta de peça; faixa típica de importação sem representação consolidada no país. |
 

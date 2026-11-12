@@ -6,6 +6,31 @@ from dataclasses import dataclass
 from enum import Enum
 
 
+# Rotulo do componente que nao recebe zona, por faltar Criticidade ou lead
+# time. Unico, porque e tambem chave do resumo por zona.
+SEM_ZONA = "Sem zona atribuída"
+
+# Teto das escalas de onde vem cada par de limiares, para separar_limiares.
+TETO_CRITICIDADE = 100
+TETO_LEAD_TIME_DIAS = 180
+
+
+def separar_limiares(baixo: int, alto: int, teto: int) -> tuple[int, int]:
+    """
+    Garante baixo < alto em um par de limiares vindo de um controle de dois
+    valores, cujos cursores podem parar no mesmo ponto.
+
+    Abre espaco para cima; com o par ja no teto da escala, abre para baixo, do
+    contrario o limiar de cima estouraria o teto e ParametrosZona recusaria o
+    par.
+    """
+    if baixo < alto:
+        return baixo, alto
+    if alto >= teto:
+        return alto - 1, alto
+    return baixo, baixo + 1
+
+
 class Zona(str, Enum):
     """Zonas de decisao de estoque da Etapa 2."""
 

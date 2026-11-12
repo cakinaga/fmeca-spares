@@ -14,6 +14,8 @@ from fmeca_spares import (
     ParametrosDeteccao,
     ParametrosOcorrencia,
     ParametrosZona,
+    TETO_CRITICIDADE,
+    TETO_LEAD_TIME_DIAS,
     Zona,
     classificar_zona,
     decidir,
@@ -22,6 +24,7 @@ from fmeca_spares import (
     ler_fmeca,
     ordenar_para_relatorio,
     resumo_por_zona,
+    separar_limiares,
 )
 from fmeca_spares.modelo import MATRIZ_ZONAS
 
@@ -51,6 +54,31 @@ def test_frota_menor_que_um_e_rejeitada():
 def test_posicao_na_faixa_fora_do_intervalo_e_rejeitada():
     with pytest.raises(ValueError):
         ParametrosOcorrencia(posicao_na_faixa=1.2)
+
+
+# -- separacao dos limiares vindos de um controle de dois valores -----------
+
+def test_separar_limiares_mantem_par_valido():
+    assert separar_limiares(20, 40, TETO_CRITICIDADE) == (20, 40)
+
+
+def test_separar_limiares_abre_espaco_para_cima():
+    assert separar_limiares(20, 20, TETO_CRITICIDADE) == (20, 21)
+
+
+def test_separar_limiares_no_teto_abre_espaco_para_baixo():
+    """
+    Os dois cursores no teto da escala: o limiar de cima nao pode passar do
+    teto, senao ParametrosZona recusa o par e a interface quebra.
+    """
+    assert separar_limiares(100, 100, TETO_CRITICIDADE) == (99, 100)
+    assert separar_limiares(180, 180, TETO_LEAD_TIME_DIAS) == (179, 180)
+
+
+@pytest.mark.parametrize("par", [(1, 1), (20, 20), (99, 99), (100, 100)])
+def test_limiares_separados_sao_sempre_aceitos(par):
+    media, alta = separar_limiares(*par, TETO_CRITICIDADE)
+    ParametrosZona(criticidade_media=media, criticidade_alta=alta)
 
 
 # -- faixas -----------------------------------------------------------------

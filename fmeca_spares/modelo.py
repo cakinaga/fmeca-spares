@@ -26,6 +26,7 @@ from typing import Any, Sequence
 
 from .leitura import FMECA, Componente, ModoDeFalha, RelatorioValidacao
 from .parametros import (
+    SEM_ZONA,
     FaixaCriticidade,
     FaixaLeadTime,
     ParametrosCusto,
@@ -180,7 +181,7 @@ def _justificar(
             faltantes.append("Criticidade (sem modo de falha pontuado)")
         if lead_time is None:
             faltantes.append("lead time (em branco na Matriz de componentes)")
-        return "Sem zona atribuída: falta " + " e ".join(faltantes) + "."
+        return f"{SEM_ZONA}: falta " + " e ".join(faltantes) + "."
 
     partes = [
         f"Criticidade {criticidade} ({faixa_c.rotulo.lower()}) "
@@ -343,7 +344,7 @@ def resumo_por_zona(decisoes: Sequence[DecisaoComponente]) -> dict[str, dict[str
             "dc_anual_total": sum(d.dc_anual_esperado or 0.0 for d in itens),
         }
     sem_zona = [d for d in decisoes if d.zona is None]
-    resumo["Sem zona atribuída"] = {
+    resumo[SEM_ZONA] = {
         "componentes": len(sem_zona),
         "ids": [d.id for d in sem_zona],
         "dc_evitavel_total": 0.0,

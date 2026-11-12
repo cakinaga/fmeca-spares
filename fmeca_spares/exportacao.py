@@ -25,6 +25,7 @@ from .modelo import (
 from .parametros import (
     DIARIA_UTI_II_SUS,
     DIARIA_UTI_III_SUS,
+    SEM_ZONA,
     ParametrosCusto,
     ParametrosDeteccao,
     ParametrosOcorrencia,
@@ -106,7 +107,7 @@ def _celula_valor(d: DecisaoComponente, chave: str):
     if chave == "faixa_l":
         return d.faixa_lead_time.rotulo if d.faixa_lead_time else None
     if chave == "zona":
-        return d.zona.rotulo if d.zona else "Sem zona atribuída"
+        return d.zona.rotulo if d.zona else SEM_ZONA
     if chave == "taxa":
         return d.taxa_falha_anual
     if chave == "dc":

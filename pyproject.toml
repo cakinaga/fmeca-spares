@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "fmeca-spares"
 version = "0.3.0"
-description = "Modelo de decisão para estoque de spare parts na Engenharia Clínica, baseado em FMECA e Downtime Cost"
+description = "Modelo de decisão para estoque de spare parts na Engenharia Clínica, baseado em FMECA e lead time"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { file = "LICENSE" }
@@ -30,7 +30,7 @@ classifiers = [
 dependencies = ["openpyxl>=3.1"]
 
 [project.optional-dependencies]
-app = ["streamlit>=1.32,<2", "altair>=5.0,<6", "pandas>=2.0"]
+app = ["streamlit>=1.48,<2", "altair>=5.0,<6", "pandas>=2.0"]
 dev = ["pytest>=8.0"]
 
 [tool.setuptools]

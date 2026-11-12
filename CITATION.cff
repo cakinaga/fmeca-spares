@@ -1,7 +1,7 @@
 cff-version: 1.2.0
 title: >-
   fmeca-spares: modelo de decisão para estoque de spare parts na
-  Engenharia Clínica baseado em FMECA e Downtime Cost
+  Engenharia Clínica baseado em FMECA e lead time
 message: >-
   Se este software for utilizado, por favor cite-o conforme os metadados
   abaixo.

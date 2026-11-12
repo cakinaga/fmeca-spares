@@ -20,6 +20,9 @@ import streamlit as st
 from fmeca_spares import (
     DIARIA_UTI_II_SUS,
     DIARIA_UTI_III_SUS,
+    SEM_ZONA,
+    TETO_CRITICIDADE,
+    TETO_LEAD_TIME_DIAS,
     ParametrosCusto,
     ParametrosDeteccao,
     ParametrosOcorrencia,
@@ -34,7 +37,11 @@ from fmeca_spares import (
 from fmeca_spares.leitura import RelatorioValidacao
 from fmeca_spares.exportacao import exportar_csv, exportar_xlsx
 from fmeca_spares.modelo import MATRIZ_ZONAS
-from fmeca_spares.parametros import FaixaCriticidade, FaixaLeadTime
+from fmeca_spares.parametros import (
+    FaixaCriticidade,
+    FaixaLeadTime,
+    separar_limiares,
+)
 
 RAIZ = Path(__file__).resolve().parent
 DADOS = RAIZ / "dados"
@@ -66,10 +73,9 @@ COR_EQUIPAMENTO = "#2e6da4"
 
 # Posicao na faixa de lambda oferecida na interface: media ou teto do intervalo
 POSICOES_LAMBDA = {0.5: "Média da faixa", 1.0: "Teto da faixa"}
-SEM_ZONA = "Sem zona atribuída"
 
 st.set_page_config(
-    page_title="Estoque de spare parts — FMECA e Downtime Cost",
+    page_title="Estoque de spare parts — FMECA e lead time",
     page_icon="🔧",
     layout="wide",
 )
@@ -115,12 +121,12 @@ def _parametros_zona() -> ParametrosZona:
         media, alta = st.slider(
             "Faixas de Criticidade",
             min_value=1,
-            max_value=100,
+            max_value=TETO_CRITICIDADE,
             value=(20, 40),
             help=(
                 "**Primeiro valor: piso da faixa média.** A falha pesa em um dos "
-                "critérios: é grave e rara ou sem risco e frequente . Padrão 20 = "
-                "S 10 × O 2 ou S 4 × O 5.\n\n"
+                "critérios: é grave, ainda que rara, ou ocasional, ainda que de "
+                "efeito leve. Padrão 20 = S 10 × O 2 ou S 4 × O 5.\n\n"
                 "**Segundo valor: piso da faixa alta.** A falha pesa nos dois "
                 "critérios: compromete função essencial e é pelo menos ocasional. "
                 "Padrão 40 = S 8 × O 5 ou S 10 × O 4.\n\n"
@@ -128,15 +134,16 @@ def _parametros_zona() -> ParametrosZona:
                 "nas escalas do formulário."
             ),
         )
+        media, alta = separar_limiares(media, alta, TETO_CRITICIDADE)
         st.caption(
-            f"Baixa: abaixo de {media}  ·  Média: de {media} a {max(alta, media + 1) - 1}"
-            f"  ·  Alta: a partir de {max(alta, media + 1)}"
+            f"Baixa: abaixo de {media}  ·  Média: de {media} a {alta - 1}"
+            f"  ·  Alta: a partir de {alta}"
         )
     with st.sidebar.expander("Lead time (dias)", expanded=False):
         curto, longo = st.slider(
             "Faixas de lead time",
             min_value=1,
-            max_value=180,
+            max_value=TETO_LEAD_TIME_DIAS,
             value=(7, 30),
             help=(
                 "**Primeiro valor: teto da faixa curta.** Até ele, a peça chega a "
@@ -149,15 +156,11 @@ def _parametros_zona() -> ParametrosZona:
                 "peça disponível."
             ),
         )
+        curto, longo = separar_limiares(curto, longo, TETO_LEAD_TIME_DIAS)
         st.caption(
             f"Curto: até {curto} dias  ·  Médio: acima de {curto} até "
-            f"{max(longo, curto + 1)} dias  ·  Longo: acima de {max(longo, curto + 1)} dias"
+            f"{longo} dias  ·  Longo: acima de {longo} dias"
         )
-
-    if media >= alta:
-        alta = media + 1
-    if curto >= longo:
-        longo = curto + 1
 
     return ParametrosZona(
         criticidade_alta=int(alta),
@@ -211,7 +214,17 @@ def _parametros_custo():
     st.sidebar.header("Frota")
     with st.sidebar.expander("Equipamentos em operação", expanded=False):
         frota = st.number_input(
-            "Equipamentos na frota da unidade", min_value=1, value=10, step=1
+            "Equipamentos na frota da unidade",
+            min_value=1,
+            value=10,
+            step=1,
+            help=(
+                "Equipamentos da mesma tecnologia em operação na unidade. "
+                "Multiplica a taxa de falha por unidade (λ) para chegar à "
+                "exposição anual da unidade; não altera as zonas. No estudo de "
+                "caso são 10: um ventilador por leito na UTI de dez leitos, sem "
+                "equipamento reserva."
+            ),
         )
 
     st.sidebar.header("Escala de Ocorrência")
@@ -368,7 +381,7 @@ def _painel_resumo(decisoes, custo: ParametrosCusto) -> None:
             _reais(dados["dc_anual_total"]) if custo.declarado else None,
             delta_color="off",
         )
-    sem_zona = resumo["Sem zona atribuída"]["componentes"]
+    sem_zona = resumo[SEM_ZONA]["componentes"]
     total_anual = sum(
         d.dc_anual_esperado or 0.0 for d in decisoes
     )
@@ -502,7 +515,7 @@ def _tabela(decisoes, custo: ParametrosCusto) -> None:
                 "Criticidade": d.criticidade,
                 "RPN": d.rpn,
                 "Lead time (dias)": d.lead_time_dias,
-                "Zona": d.zona.rotulo if d.zona else "Sem zona atribuída",
+                "Zona": d.zona.rotulo if d.zona else SEM_ZONA,
                 "λ (falha/ano)": d.taxa_falha_anual,
                 "DC por evento (R$)": d.dc_evitavel,
                 "DC anual (R$)": d.dc_anual_esperado,
@@ -642,12 +655,13 @@ def main() -> None:
     st.html(CSS_BARRA_LATERAL)
     st.title("Estoque de spare parts na Engenharia Clínica")
     st.caption(
-        "Etapa 2 da estrutura metodológica. Para cada componente, indica se a "
-        "peça de reposição deve ficar em estoque de segurança, ser ressuprida "
-        "por ponto de pedido ou comprada sob demanda. A decisão cruza a "
-        "Criticidade do FMECA (S × O) com o lead time de fornecimento. O "
-        "Downtime Cost estima quanto a falta de cada peça custa por ano, sem "
-        "alterar a decisão."
+        "Decisão de estoque de peças de reposição a partir do FMECA do "
+        "equipamento: para cada componente, o cruzamento entre a Criticidade "
+        "(S × O) e o prazo de fornecimento (lead time) indica estoque de "
+        "segurança local, ponto de pedido ou compra sob demanda. O custo de "
+        "indisponibilidade (Downtime Cost) estima a exposição anual esperada "
+        "da unidade e prioriza os componentes dentro de cada zona, sem alterar "
+        "a zona. (Etapa 2 da estrutura metodológica.)"
     )
 
     arquivo_fmeca = _carregar_entradas()

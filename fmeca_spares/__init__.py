@@ -22,6 +22,9 @@ Uso minimo:
 from .parametros import (
     DIARIA_UTI_II_SUS,
     DIARIA_UTI_III_SUS,
+    SEM_ZONA,
+    TETO_CRITICIDADE,
+    TETO_LEAD_TIME_DIAS,
     FaixaCriticidade,
     FaixaLeadTime,
     ParametrosCusto,
@@ -29,6 +32,7 @@ from .parametros import (
     ParametrosOcorrencia,
     ParametrosZona,
     Zona,
+    separar_limiares,
 )
 from .leitura import (
     Componente,
@@ -52,6 +56,10 @@ from .modelo import (
 __all__ = [
     "DIARIA_UTI_II_SUS",
     "DIARIA_UTI_III_SUS",
+    "SEM_ZONA",
+    "TETO_CRITICIDADE",
+    "TETO_LEAD_TIME_DIAS",
+    "separar_limiares",
     "FaixaCriticidade",
     "FaixaLeadTime",
     "ParametrosCusto",

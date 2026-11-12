@@ -23,7 +23,7 @@ Roteiro para depositar a ferramenta e obter o DOI que será citado no TCC.
 ```bash
 git init
 git add .
-git commit -m "Modelo de decisão de estoque de spare parts: FMECA e Downtime Cost"
+git commit -m "Modelo de decisão de estoque de spare parts: FMECA e lead time"
 git branch -M main
 git remote add origin https://github.com/cakinaga/fmeca-spares.git
 git push -u origin main
@@ -56,7 +56,7 @@ que o leitor chegue exatamente ao código descrito no texto.
 Formato ABNT para software com DOI:
 
 > AKINAGA, C. Y. H. **fmeca-spares: modelo de decisão para estoque de spare
-> parts na Engenharia Clínica baseado em FMECA e Downtime Cost**. Versão 0.3.0.
+> parts na Engenharia Clínica baseado em FMECA e lead time**. Versão 0.3.0.
 > [S.l.]: Zenodo, 2026. DOI: 10.5281/zenodo.XXXXXXX. Disponível em:
 > https://doi.org/10.5281/zenodo.XXXXXXX. Acesso em: DD mmm. AAAA.
 
