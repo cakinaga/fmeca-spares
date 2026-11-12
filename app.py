@@ -35,7 +35,7 @@ from fmeca_spares import (
     resumo_por_zona,
 )
 from fmeca_spares.leitura import RelatorioValidacao
-from fmeca_spares.exportacao import exportar_csv, exportar_xlsx
+from fmeca_spares.exportacao import exportar_csv, exportar_xlsx, modelo_em_branco
 from fmeca_spares.modelo import MATRIZ_ZONAS
 from fmeca_spares.parametros import (
     FaixaCriticidade,
@@ -85,6 +85,31 @@ st.set_page_config(
 # entrada de dados
 # --------------------------------------------------------------------------
 
+@st.cache_data
+def _modelo_em_branco() -> bytes:
+    return modelo_em_branco(FMECA_EXEMPLO)
+
+
+def _botao_modelo() -> None:
+    if not FMECA_EXEMPLO.exists():
+        return
+    st.sidebar.download_button(
+        "Baixar formulário FMECA em branco (.xlsx)",
+        data=_modelo_em_branco(),
+        file_name="formulario_fmeca_em_branco.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        icon=":material/download:",
+        help=(
+            "Modelo para preencher com outro equipamento: identificação, "
+            "«Matriz de componentes» com o lead time de cada peça, «Modos de "
+            "falha» com as notas S, O e D, e a aba «Tabela» com as escalas. "
+            "RPN e Criticidade são calculados pelas fórmulas da planilha. Para "
+            "mais linhas, insira-as dentro da tabela, para que as fórmulas "
+            "acompanhem."
+        ),
+    )
+
+
 def _carregar_entradas():
     st.sidebar.header("Dados de entrada")
 
@@ -96,6 +121,8 @@ def _carregar_entradas():
             "na aba «Matriz de componentes». Desmarque para enviar o seu arquivo."
         ),
     )
+
+    _botao_modelo()
 
     if usar_exemplo:
         if not FMECA_EXEMPLO.exists():

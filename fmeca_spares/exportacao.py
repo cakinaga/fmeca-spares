@@ -12,11 +12,19 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Sequence
 
+import openpyxl
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
-from .leitura import FMECA, RelatorioValidacao
+from .leitura import (
+    ABA_COMPONENTES,
+    ABA_MODOS,
+    FMECA,
+    RelatorioValidacao,
+    _achar_cabecalho,
+    normalizar,
+)
 from .modelo import (
     DecisaoComponente,
     ordenar_para_relatorio,
@@ -318,6 +326,47 @@ def exportar_xlsx(
     if destino is not None:
         Path(destino).write_bytes(dados)
     return dados
+
+
+def modelo_em_branco(origem: str | Path) -> bytes:
+    """
+    Formulario FMECA em branco, gerado a partir de um formulario preenchido.
+
+    Mantem abas, cabecalhos, formatacao, as formulas de RPN e Criticidade e a
+    aba Tabela com as escalas. Apaga a identificacao do equipamento e os
+    valores digitados nas linhas de componentes e de modos de falha.
+    """
+    wb = openpyxl.load_workbook(origem)
+    for nome in (ABA_COMPONENTES, ABA_MODOS):
+        if nome not in wb.sheetnames:
+            continue
+        ws = wb[nome]
+        _limpar_identificacao(ws)
+        linhas = [list(r) for r in ws.iter_rows(values_only=True)]
+        cabecalho = _achar_cabecalho(linhas)
+        if cabecalho is None:
+            continue
+        for linha in ws.iter_rows(min_row=cabecalho + 2):
+            for cel in linha:
+                if cel.value is not None and not str(cel.value).startswith("="):
+                    cel.value = None
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    return buffer.getvalue()
+
+
+def _limpar_identificacao(ws) -> None:
+    """Apaga o valor ao lado de cada rotulo terminado em ':' no topo da aba."""
+    for linha in ws.iter_rows(max_row=6):
+        for i, cel in enumerate(linha):
+            if not normalizar(cel.value).endswith(":"):
+                continue
+            for seguinte in linha[i + 1 :]:
+                if seguinte.value is None:
+                    continue
+                if not normalizar(seguinte.value).endswith(":"):
+                    seguinte.value = None
+                break
 
 
 # casas decimais por coluna no CSV; as demais colunas usam duas

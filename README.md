@@ -234,6 +234,12 @@ sempre recalculada de S × O a partir das notas; o valor declarado na aba de
 matriz só é usado como recurso quando o componente não tem modo pontuado, e
 qualquer divergência entre os dois aparece na aba «Validação» do resultado.
 
+Um formulário em branco pode ser baixado na barra lateral da interface
+(«Baixar formulário FMECA em branco»). Ele é gerado a partir do estudo de caso:
+mantém abas, cabeçalhos, formatação, as fórmulas de RPN e Criticidade e a aba
+«Tabela» com as escalas, sem a identificação do equipamento e sem os dados.
+Para mais linhas, insira-as dentro da tabela, para que as fórmulas acompanhem.
+
 ### Lead time
 
 O lead time é o único dado de fornecimento que o modelo usa. Fica na coluna

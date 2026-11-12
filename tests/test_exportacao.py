@@ -12,7 +12,15 @@ from fmeca_spares import (
     ParametrosZona,
     decidir,
 )
-from fmeca_spares.exportacao import COLUNAS, exportar_csv, exportar_xlsx
+from fmeca_spares.exportacao import (
+    COLUNAS,
+    exportar_csv,
+    exportar_xlsx,
+    modelo_em_branco,
+)
+from fmeca_spares.leitura import RelatorioValidacao, ler_escala_ocorrencia
+
+from conftest import FMECA_CASO
 
 CUSTO = ParametrosCusto(frota_equipamentos=10)
 ZONAS = ParametrosZona()
@@ -92,6 +100,46 @@ def test_csv_preserva_a_precisao_da_taxa_de_falha(fmeca_caso):
     }
     assert "0,025" in valores
     assert "0,03" not in valores
+
+
+def _modelo(fmeca_caso):
+    return openpyxl.load_workbook(io.BytesIO(modelo_em_branco(FMECA_CASO)))
+
+
+def test_modelo_em_branco_mantem_abas_e_cabecalhos(fmeca_caso):
+    wb = _modelo(fmeca_caso)
+    original = openpyxl.load_workbook(FMECA_CASO)
+    assert wb.sheetnames == original.sheetnames
+    for nome in ("Matriz de componentes", "Modos de falha"):
+        assert [c.value for c in wb[nome][8]] == [c.value for c in original[nome][8]]
+
+
+def test_modelo_em_branco_apaga_identificacao_e_dados(fmeca_caso):
+    wb = _modelo(fmeca_caso)
+    for nome in ("Matriz de componentes", "Modos de falha"):
+        ws = wb[nome]
+        textos = {
+            str(c.value) for linha in ws.iter_rows() for c in linha if c.value is not None
+        }
+        assert not any("Hamilton" in t or "Ventilador" in t for t in textos), nome
+        dados = [
+            c.value
+            for linha in ws.iter_rows(min_row=9)
+            for c in linha
+            if c.value is not None and not str(c.value).startswith("=")
+        ]
+        assert dados == [], nome
+    assert wb["Modos de falha"]["A2"].value == "Equipamento:"
+
+
+def test_modelo_em_branco_mantem_formulas_e_escala(fmeca_caso):
+    wb = _modelo(fmeca_caso)
+    assert str(wb["Modos de falha"]["N9"].value).startswith("=")
+    assert str(wb["Matriz de componentes"]["G9"].value).startswith("=")
+    rel = RelatorioValidacao()
+    linhas = [list(r) for r in wb["Tabela"].iter_rows(values_only=True)]
+    assert ler_escala_ocorrencia(linhas, rel) == fmeca_caso.escala_ocorrencia
+    assert rel.avisos == []
 
 
 def test_csv_fecha_a_conta_da_exposicao_anual(fmeca_caso):
