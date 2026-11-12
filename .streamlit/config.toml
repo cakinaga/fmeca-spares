@@ -1,0 +1,19 @@
+[theme]
+baseFontSize = 18
+
+# em px, para nao crescerem com baseFontSize
+headingFontSizes = ["44px", "36px", "28px", "24px", "20px", "16px"]
+
+[theme.sidebar]
+headingFontSizes = ["24px", "20px", "18px", "16px", "14px", "12px"]
+
+# as duas variantes mantem a troca entre modo claro e escuro
+[theme.light]
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f0f2f6"
+textColor = "#31333f"
+
+[theme.dark]
+backgroundColor = "#0e1117"
+secondaryBackgroundColor = "#262730"
+textColor = "#fafafa"
