@@ -1,0 +1,40 @@
+cff-version: 1.2.0
+title: >-
+  fmeca-spares: modelo de decisão para estoque de spare parts na
+  Engenharia Clínica baseado em FMECA e lead time
+message: >-
+  Se este software for utilizado, por favor cite-o conforme os metadados
+  abaixo.
+type: software
+authors:
+  - family-names: Akinaga
+    given-names: Chiara Y. H.
+    affiliation: Universidade Federal de São Paulo (UNIFESP)
+    # orcid: "https://orcid.org/0000-0000-0000-0000"   # preencher antes de publicar
+version: 0.3.0
+date-released: "2026-11-01"
+license: MIT
+repository-code: "https://github.com/cakinaga/fmeca-spares"
+abstract: >-
+  Implementação computacional de uma estrutura metodológica parametrizável
+  para a decisão de estoque de peças de reposição na Engenharia Clínica. O
+  modelo cruza a Criticidade do FMECA (produto entre Severidade e Ocorrência)
+  com o lead time de fornecimento para classificar cada componente em uma de
+  três zonas de decisão — estoque de segurança local, ponto de pedido e compra
+  sob demanda — e quantifica a exposição anual ao custo de indisponibilidade
+  por falta da peça (Downtime Cost). Os modos de falha oculta, lidos da
+  Detecção, são sinalizados na justificativa de cada componente. Acompanha um estudo de caso demonstrativo com um ventilador pulmonar de UTI.
+keywords:
+  - engenharia clínica
+  - FMECA
+  - downtime cost
+  - gestão de estoque
+  - peças de reposição
+  - ventilador pulmonar
+  - engenharia biomédica
+# Preencher após o depósito no Zenodo:
+# doi: 10.5281/zenodo.XXXXXXX
+# identifiers:
+#   - type: doi
+#     value: 10.5281/zenodo.XXXXXXX
+#     description: Versão depositada no Zenodo
