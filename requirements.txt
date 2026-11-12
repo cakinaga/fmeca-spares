@@ -1,0 +1,11 @@
+# Interface. O modulo de calculo precisa apenas de openpyxl.
+# Versao testada: 1.65. O piso e 1.48 porque app.py usa st.html (1.37),
+# st.container(horizontal=...) (1.46) e o parametro width (1.48), alem do
+# tema com baseFontSize e [theme.sidebar] em .streamlit/config.toml.
+streamlit>=1.48,<2
+altair>=5.0,<6
+pandas>=2.0
+openpyxl>=3.1
+
+# Testes
+pytest>=8.0
