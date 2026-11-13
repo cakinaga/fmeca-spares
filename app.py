@@ -28,6 +28,7 @@ from fmeca_spares import (
     ParametrosOcorrencia,
     ParametrosZona,
     Zona,
+    agrupar_por_posicao,
     decidir,
     escala_do_formulario,
     ler_fmeca,
@@ -93,9 +94,18 @@ def _modelo_em_branco() -> bytes:
 def _botao_modelo() -> None:
     if not FMECA_EXEMPLO.exists():
         return
+    try:
+        modelo = _modelo_em_branco()
+    except OSError:
+        # arquivo bloqueado, por exemplo aberto no Excel
+        st.sidebar.caption(
+            "Formulário em branco indisponível: o arquivo do estudo de caso "
+            "está aberto em outro programa."
+        )
+        return
     st.sidebar.download_button(
         "Baixar formulário FMECA em branco (.xlsx)",
-        data=_modelo_em_branco(),
+        data=modelo,
         file_name="formulario_fmeca_em_branco.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         icon=":material/download:",
@@ -590,7 +600,9 @@ def _criticidade_deteccao(fmeca, decisoes, zonas: ParametrosZona,
     st.caption(
         "Um ponto por modo de falha. A faixa sombreada reúne as falhas ocultas "
         f"(D ≥ {deteccao.limiar_oculta}): nelas o estoque encurta o reparo, mas "
-        "não antecipa a descoberta da falha. O tamanho é o RPN."
+        "não antecipa a descoberta da falha. O tamanho é o RPN. Modos com a "
+        "mesma Criticidade e a mesma Detecção ocupam o mesmo ponto; o numeral "
+        "ao lado indica quantos são."
     )
     zona_de = {d.id: d.zona for d in decisoes}
     linhas = []
@@ -616,6 +628,23 @@ def _criticidade_deteccao(fmeca, decisoes, zonas: ParametrosZona,
         st.info("Nenhum modo de falha tem S, O e D pontuados.")
         return
     df = pd.DataFrame(linhas)
+
+    # modos na mesma posicao tem o mesmo RPN, logo o mesmo tamanho: um cobre o outro
+    grupos = agrupar_por_posicao(fmeca.modos)
+    posicao = list(zip(df["Criticidade"], df["D"]))
+    df["Modos na posicao"] = [len(grupos[p]) for p in posicao]
+    df["Coincidentes"] = [
+        ", ".join(grupos[p]) if len(grupos[p]) > 1 else "" for p in posicao
+    ]
+    # uma linha por posicao coincidente, para o numeral nao se repetir sobre si
+    sobrepostos = pd.DataFrame(
+        [
+            {"Criticidade": c, "D": d, "Quantidade": str(len(ids))}
+            for (c, d), ids in grupos.items()
+            if len(ids) > 1
+        ],
+        columns=["Criticidade", "D", "Quantidade"],
+    )
 
     zonas_ord = (Zona.ESTOQUE_SEGURANCA, Zona.PONTO_PEDIDO, Zona.SOB_DEMANDA)
     escala = alt.Scale(
@@ -650,14 +679,23 @@ def _criticidade_deteccao(fmeca, decisoes, zonas: ParametrosZona,
                 alt.Tooltip("S:Q"), alt.Tooltip("O:Q"), alt.Tooltip("D:Q"),
                 alt.Tooltip("Criticidade:Q"), alt.Tooltip("RPN:Q"),
                 alt.Tooltip("Zona:N"),
+                alt.Tooltip("Modos na posicao:Q", title="Modos nesta posição"),
+                alt.Tooltip("Coincidentes:N", title="Sub IDs sobrepostos"),
             ],
         )
+    )
+    contagem = (
+        alt.Chart(sobrepostos)
+        .mark_text(align="left", baseline="bottom", dx=6, dy=-6, fontSize=9, color="#999")
+        .encode(x="Criticidade:Q", y="D:Q", text="Quantidade:N")
     )
     corte_c = alt.Chart(
         pd.DataFrame({"c": [zonas.criticidade_media, zonas.criticidade_alta]})
     ).mark_rule(strokeDash=[4, 4], color="#999").encode(x="c:Q")
 
-    grafico = (faixa + corte_c + pontos + rotulo).properties(height=440, width="container")
+    grafico = (faixa + corte_c + pontos + contagem + rotulo).properties(
+        height=440, width="container"
+    )
     st.altair_chart(grafico)
 
 
@@ -703,6 +741,13 @@ def main() -> None:
 
     try:
         fmeca = ler_fmeca(arquivo_fmeca)
+    except PermissionError:
+        _tabela_escala(area_escala, None, escala)
+        st.error(
+            "O formulário FMECA está aberto em outro programa, provavelmente o "
+            "Excel, que bloqueia a leitura. Feche o arquivo e recarregue a página."
+        )
+        return
     except Exception as exc:  # pragma: no cover
         _tabela_escala(area_escala, None, escala)
         st.error(f"Não consegui ler o formulário FMECA: {exc}")

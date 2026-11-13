@@ -17,6 +17,7 @@ from fmeca_spares import (
     TETO_CRITICIDADE,
     TETO_LEAD_TIME_DIAS,
     Zona,
+    agrupar_por_posicao,
     classificar_zona,
     decidir,
     downtime_cost_anual_esperado,
@@ -485,3 +486,57 @@ def test_estudo_de_caso_modos_ocultos(fmeca_caso):
     """Regressao sobre a escala de Deteccao do formulario: 9 modos com D >= 7."""
     decisoes = decidir(fmeca_caso)
     assert sum(len(d.modos_ocultos) for d in decisoes) == 9
+
+
+# -- posicao no grafico Criticidade x Deteccao ------------------------------
+
+def _caso_posicoes():
+    """
+    Tres modos na posicao (Criticidade 30, D 8), de dois componentes e com
+    Sub IDs fora de ordem; um modo sozinho em (24, 2); um sem Ocorrencia e um
+    sem Deteccao, que ficam fora do grafico.
+    """
+    return ler_fmeca(
+        construir_fmeca(
+            componentes=[
+                (2, "Valvula", "Pneumático", "F", "Peça", 240, 30, 15),
+                (10, "Diafragma", "Pneumático", "F", "Peça", 240, 30, 60),
+                (3, "Display", "Interface", "F", "Peça", 48, 24, 15),
+            ],
+            modos=[
+                (10, "10.1", "Diafragma", "Pneumático", "Ruptura", 3, 10, 8, 240, 30),
+                (2, "2.10", "Valvula", "Pneumático", "Travamento", 3, 10, 8, 240, 30),
+                (2, "2.2", "Valvula", "Pneumático", "Vazamento", 3, 10, 8, 240, 30),
+                (3, "3.1", "Display", "Interface", "Tela apagada", 4, 6, 2, 48, 24),
+                (3, "3.2", "Display", "Interface", "Sem Ocorrencia", None, 6, 2, None, None),
+                (3, "3.3", "Display", "Interface", "Sem Deteccao", 4, 6, None, None, 24),
+            ],
+        )
+    )
+
+
+def test_agrupar_posicao_com_um_unico_modo():
+    grupos = agrupar_por_posicao(_caso_posicoes().modos)
+    assert grupos[(24, 2)] == ["3.1"]
+
+
+def test_agrupar_posicao_com_varios_modos_em_ordem_numerica():
+    grupos = agrupar_por_posicao(_caso_posicoes().modos)
+    assert grupos[(30, 8)] == ["2.2", "2.10", "10.1"]
+
+
+def test_agrupar_ignora_modos_sem_criticidade_ou_sem_deteccao():
+    grupos = agrupar_por_posicao(_caso_posicoes().modos)
+    agrupados = [s for ids in grupos.values() for s in ids]
+    assert "3.2" not in agrupados
+    assert "3.3" not in agrupados
+    assert set(grupos) == {(30, 8), (24, 2)}
+
+
+def test_estudo_de_caso_posicoes_coincidentes(fmeca_caso):
+    """Regressao: os 52 modos do ventilador ocupam 41 posicoes distintas."""
+    grupos = agrupar_por_posicao(fmeca_caso.modos)
+    assert sum(len(ids) for ids in grupos.values()) == 52
+    assert len(grupos) == 41
+    assert grupos[(9, 6)] == ["2.1", "2.2", "3.1", "3.2"]
+    assert grupos[(45, 4)] == ["7.1", "7.2", "7.3"]

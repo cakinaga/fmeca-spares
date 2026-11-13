@@ -22,7 +22,7 @@ componente; serve para ordenar dentro de cada zona.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import Any, Sequence
+from typing import Any, Iterable, Sequence
 
 from .leitura import FMECA, Componente, ModoDeFalha, RelatorioValidacao
 from .parametros import (
@@ -351,6 +351,29 @@ def resumo_por_zona(decisoes: Sequence[DecisaoComponente]) -> dict[str, dict[str
         "dc_anual_total": 0.0,
     }
     return resumo
+
+
+def agrupar_por_posicao(
+    modos: Iterable[ModoDeFalha],
+) -> dict[tuple[int, int], list[str]]:
+    """
+    Agrupa os modos de falha pela posicao no grafico Criticidade x Deteccao.
+
+    A chave e (criticidade_calculada, deteccao_nota); o valor, os Sub IDs dos
+    modos naquela posicao, em ordem numerica (2.1, 2.2, 10.1). Modos sem
+    Criticidade ou sem Deteccao ficam de fora, como no grafico.
+    """
+    grupos: dict[tuple[int, int], list[str]] = {}
+    for m in modos:
+        if m.criticidade_calculada is None or m.deteccao_nota is None:
+            continue
+        grupos.setdefault((m.criticidade_calculada, m.deteccao_nota), []).append(m.sub_id)
+    return {posicao: sorted(ids, key=_ordem_sub_id) for posicao, ids in grupos.items()}
+
+
+def _ordem_sub_id(sub_id: str) -> tuple[tuple[int, int | str], ...]:
+    """Chave de ordenacao numerica do Sub ID: '2.10' vem depois de '2.9'."""
+    return tuple((0, int(p)) if p.isdigit() else (1, p) for p in sub_id.split("."))
 
 
 def ordenar_para_relatorio(

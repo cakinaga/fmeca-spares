@@ -49,6 +49,7 @@ from .modelo import (
     downtime_cost_anual_esperado,
     classificar_zona,
     resumo_por_zona,
+    agrupar_por_posicao,
     ordenar_para_relatorio,
     MATRIZ_ZONAS,
 )
@@ -79,6 +80,7 @@ __all__ = [
     "downtime_cost_anual_esperado",
     "classificar_zona",
     "resumo_por_zona",
+    "agrupar_por_posicao",
     "ordenar_para_relatorio",
     "MATRIZ_ZONAS",
 ]

@@ -194,8 +194,10 @@ crítico, ou só é percebida pela consequência.
 A peça na prateleira encurta o reparo, mas não antecipa a descoberta da
 falha. Por isso, a justificativa de cada componente com modo de falha oculta
 traz um alerta. O app mostra ainda um gráfico Criticidade × Detecção com a
-faixa das falhas ocultas destacada. O limiar (D oculta = 7) é ajustável na
-interface e em `ParametrosDeteccao`.
+faixa das falhas ocultas destacada. Modos com a mesma Criticidade e a mesma
+Detecção caem no mesmo ponto e, como têm o mesmo RPN, com o mesmo tamanho; um
+numeral ao lado do ponto indica quantos são, e o tooltip lista os Sub IDs. O
+limiar (D oculta = 7) é ajustável na interface e em `ParametrosDeteccao`.
 
 ---
 
