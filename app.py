@@ -11,6 +11,7 @@ parametros, exibe e exporta.
 from __future__ import annotations
 
 import html
+import math
 from pathlib import Path
 
 import altair as alt
@@ -127,8 +128,9 @@ def _carregar_entradas():
         "Usar o estudo de caso de demonstração",
         value=True,
         help=(
-            "Formulário FMECA do ventilador pulmonar, com lead times ilustrativos "
-            "na aba «Matriz de componentes». Desmarque para enviar o seu arquivo."
+            "Formulário FMECA do ventilador pulmonar, com o lead time de cada "
+            "componente atribuído pelo subsistema na aba «Matriz de componentes». "
+            "Desmarque para enviar o seu arquivo."
         ),
     )
 
@@ -503,12 +505,41 @@ def _dispersao(decisoes, zonas: ParametrosZona, custo: ParametrosCusto) -> None:
         domain=[z.rotulo for z in (Zona.ESTOQUE_SEGURANCA, Zona.PONTO_PEDIDO, Zona.SOB_DEMANDA)],
         range=[COR_ZONA[Zona.ESTOQUE_SEGURANCA], COR_ZONA[Zona.PONTO_PEDIDO], COR_ZONA[Zona.SOB_DEMANDA]],
     )
+    # dominios fixos, para que o sombreado chegue a borda do grafico
+    teto_y = math.ceil(max(df["LeadTime"].max(), zonas.lead_time_longo_dias) * 1.1 / 10) * 10
+    eixo_x = alt.Scale(domain=[0, TETO_CRITICIDADE], nice=False)
+    eixo_y = alt.Scale(domain=[0, teto_y], nice=False)
+
+    # celulas de estoque de seguranca: Alta x (Medio, Longo) e Media x Longo
+    regioes = pd.DataFrame(
+        {
+            "x": [zonas.criticidade_alta, zonas.criticidade_media],
+            "x2": [TETO_CRITICIDADE, zonas.criticidade_alta],
+            "y": [zonas.lead_time_curto_dias, zonas.lead_time_longo_dias],
+            "y2": [teto_y, teto_y],
+        }
+    )
+    sombreado = (
+        alt.Chart(regioes)
+        .mark_rect(color=COR_ZONA[Zona.ESTOQUE_SEGURANCA], opacity=0.08)
+        .encode(
+            x=alt.X("x:Q", scale=eixo_x), x2="x2:Q",
+            y=alt.Y("y:Q", scale=eixo_y), y2="y2:Q",
+        )
+    )
+    rotulo = (
+        alt.Chart(pd.DataFrame({"x": [TETO_CRITICIDADE], "y": [teto_y],
+                                "t": [Zona.ESTOQUE_SEGURANCA.rotulo.lower()]}))
+        .mark_text(align="right", baseline="top", dx=-4, dy=4, fontSize=11,
+                   color=COR_ZONA[Zona.ESTOQUE_SEGURANCA])
+        .encode(x=alt.X("x:Q", scale=eixo_x), y=alt.Y("y:Q", scale=eixo_y), text="t:N")
+    )
     pontos = (
         alt.Chart(df)
         .mark_circle(opacity=0.85, stroke="white", strokeWidth=1)
         .encode(
-            x=alt.X("Criticidade:Q", title="Criticidade (S × O)", scale=alt.Scale(nice=True)),
-            y=alt.Y("LeadTime:Q", title="Lead time (dias)"),
+            x=alt.X("Criticidade:Q", title="Criticidade (S × O)", scale=eixo_x),
+            y=alt.Y("LeadTime:Q", title="Lead time (dias)", scale=eixo_y),
             color=alt.Color("Zona:N", scale=escala, legend=alt.Legend(title="Zona de estoque", orient="bottom")),
             size=alt.Size(
                 "ExposicaoAnual:Q",
@@ -530,12 +561,14 @@ def _dispersao(decisoes, zonas: ParametrosZona, custo: ParametrosCusto) -> None:
     )
     corte_c = alt.Chart(
         pd.DataFrame({"c": [zonas.criticidade_media, zonas.criticidade_alta]})
-    ).mark_rule(strokeDash=[4, 4], color="#999").encode(x="c:Q")
+    ).mark_rule(strokeDash=[4, 4], color="#999").encode(x=alt.X("c:Q", scale=eixo_x))
     corte_l = alt.Chart(
         pd.DataFrame({"l": [zonas.lead_time_curto_dias, zonas.lead_time_longo_dias]})
-    ).mark_rule(strokeDash=[4, 4], color="#999").encode(y="l:Q")
+    ).mark_rule(strokeDash=[4, 4], color="#999").encode(y=alt.Y("l:Q", scale=eixo_y))
 
-    grafico = (pontos + corte_c + corte_l).properties(height=420, width="container")
+    grafico = (sombreado + corte_c + corte_l + pontos + rotulo).properties(
+        height=420, width="container"
+    )
     st.altair_chart(grafico)
 
 

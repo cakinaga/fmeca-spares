@@ -253,9 +253,24 @@ pedido e a peça disponível para instalação, em dias de calendário.
   conferência registra um aviso.
 - Valor negativo é erro.
 
-O cabeçalho também é reconhecido como `Leadtime` ou `Prazo`. Os lead times do
-estudo de caso são ilustrativos: substitua-os pelos prazos dos contratos do
-hospital antes de usar o resultado em decisão de compra.
+O cabeçalho também é reconhecido como `Leadtime` ou `Prazo`.
+
+No estudo de caso, o lead time de cada componente foi atribuído pelo seu
+subsistema:
+
+| Subsistema | Lead time (dias) |
+| --- | :---: |
+| Interface do paciente | 7 |
+| Proteção | 15 |
+| Elétrico | 15 |
+| Mecânico | 30 |
+| Sensoriamento | 30 |
+| Pneumático | 30 |
+| Controle e eletrônica | 60 |
+
+São prazos de referência por tipo de peça, não prazos de fornecedores
+específicos: substitua-os pelos prazos realizados nas compras do hospital
+antes de usar o resultado em decisão de compra.
 
 ---
 
@@ -290,7 +305,7 @@ fmeca_spares/
   modelo.py        Downtime Cost, matriz de zonas, decisão por componente
   exportacao.py    planilha de resultado, resumo, parâmetros e validação
 app.py             interface Streamlit
-dados/             formulário FMECA do estudo de caso
+dados/             formulário FMECA do estudo de caso e registro das notas de Ocorrência
 tests/             suíte pytest
 ```
 
@@ -317,7 +332,8 @@ mudança a ser deliberada.
 - **A Ocorrência do estudo de caso vem de notificações, não de histórico de
   manutenção.** Sem o tamanho da frota notificante, não há denominador para
   uma taxa de falha por unidade-ano; a nota é um ordenamento relativo entre
-  componentes, e a tradução para λ é a da escala declarada no formulário.
+  componentes, e a tradução para λ é a da escala declarada no formulário. O
+  critério das notas está em `dados/notas_ocorrencia_maude.md`.
 - **A Ocorrência é atribuída por componente, não por modo de falha.** Todos os
   modos de um mesmo componente compartilham a nota, de modo que o RPN varia
   entre eles apenas por Severidade e Detecção.

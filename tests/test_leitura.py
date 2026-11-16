@@ -226,8 +226,8 @@ def test_falta_da_coluna_de_lead_time_e_erro_bloqueante():
 def test_estudo_de_caso_le_sem_inconsistencia(fmeca_caso):
     assert fmeca_caso.validacao.ok
     assert fmeca_caso.validacao.avisos == []
-    assert len(fmeca_caso.componentes) == 23
-    assert len(fmeca_caso.modos) == 52
+    assert len(fmeca_caso.componentes) == 20
+    assert len(fmeca_caso.modos) == 42
     assert fmeca_caso.equipamento == "Ventilador pulmonar"
     assert fmeca_caso.modelo == "Hamilton C6"
     assert fmeca_caso.setor == "UTI"

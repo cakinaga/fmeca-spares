@@ -327,7 +327,7 @@ def test_lead_time_longo_sustenta_o_estoque_de_seguranca_sozinho():
 
 def test_estudo_de_caso_classifica_todos_os_componentes(fmeca_caso):
     decisoes = decidir(fmeca_caso)
-    assert len(decisoes) == 23
+    assert len(decisoes) == 20
     assert all(d.decidido for d in decisoes)
 
 
@@ -335,20 +335,23 @@ def test_estudo_de_caso_zonas_de_referencia(fmeca_caso):
     """Regressao sobre os limiares padrao e os lead times do estudo de caso."""
     decisoes = {d.id: d for d in decidir(fmeca_caso)}
     assert decisoes[19].zona is Zona.ESTOQUE_SEGURANCA  # turbina
-    assert decisoes[17].zona is Zona.ESTOQUE_SEGURANCA  # placa de controle
+    assert decisoes[4].zona is Zona.ESTOQUE_SEGURANCA   # placa de controle (IP)
+    assert decisoes[17].zona is Zona.ESTOQUE_SEGURANCA  # placa principal (VU)
     assert decisoes[7].zona is Zona.ESTOQUE_SEGURANCA   # sensor de fluxo
     assert decisoes[8].zona is Zona.ESTOQUE_SEGURANCA   # valvula expiratoria
+    assert decisoes[9].zona is Zona.PONTO_PEDIDO        # entrada de ar
+    assert decisoes[20].zona is Zona.PONTO_PEDIDO       # valvula inspiratoria
     assert decisoes[1].zona is Zona.SOB_DEMANDA         # circuito, consumivel
     assert decisoes[5].zona is Zona.SOB_DEMANDA         # rodizios
     assert decisoes[6].zona is Zona.SOB_DEMANDA         # celula de O2
-    assert decisoes[9].zona is Zona.SOB_DEMANDA         # o-rings
+    assert decisoes[11].zona is Zona.SOB_DEMANDA        # display
 
     por_zona = {}
     for d in decisoes.values():
         por_zona[d.zona] = por_zona.get(d.zona, 0) + 1
     assert por_zona[Zona.ESTOQUE_SEGURANCA] == 6
     assert por_zona[Zona.PONTO_PEDIDO] == 5
-    assert por_zona[Zona.SOB_DEMANDA] == 12
+    assert por_zona[Zona.SOB_DEMANDA] == 9
 
 
 def test_estudo_de_caso_corte_mais_alto_reduz_o_estoque_de_seguranca(
@@ -483,9 +486,9 @@ def test_justificativa_alerta_falha_oculta():
 
 
 def test_estudo_de_caso_modos_ocultos(fmeca_caso):
-    """Regressao sobre a escala de Deteccao do formulario: 9 modos com D >= 7."""
+    """Regressao sobre a escala de Deteccao do formulario: 3 modos com D >= 7."""
     decisoes = decidir(fmeca_caso)
-    assert sum(len(d.modos_ocultos) for d in decisoes) == 9
+    assert sum(len(d.modos_ocultos) for d in decisoes) == 3
 
 
 # -- posicao no grafico Criticidade x Deteccao ------------------------------
@@ -534,9 +537,9 @@ def test_agrupar_ignora_modos_sem_criticidade_ou_sem_deteccao():
 
 
 def test_estudo_de_caso_posicoes_coincidentes(fmeca_caso):
-    """Regressao: os 52 modos do ventilador ocupam 41 posicoes distintas."""
+    """Regressao: os 42 modos do ventilador ocupam 33 posicoes distintas."""
     grupos = agrupar_por_posicao(fmeca_caso.modos)
-    assert sum(len(ids) for ids in grupos.values()) == 52
-    assert len(grupos) == 41
+    assert sum(len(ids) for ids in grupos.values()) == 42
+    assert len(grupos) == 33
     assert grupos[(9, 6)] == ["2.1", "2.2", "3.1", "3.2"]
-    assert grupos[(45, 4)] == ["7.1", "7.2", "7.3"]
+    assert grupos[(50, 4)] == ["18.1", "18.2"]
