@@ -427,22 +427,42 @@ def test_s_e_o_vem_do_modo_dimensionante_e_fecham_com_a_criticidade():
     assert d.criticidade == d.severidade * d.ocorrencia == 20
 
 
-def test_aviso_quando_outro_modo_tem_ocorrencia_maior():
+def test_aviso_quando_os_modos_tem_ocorrencias_diferentes():
     from fmeca_spares.leitura import RelatorioValidacao
 
     fmeca = _caso_notas_cruzadas()
     rel = RelatorioValidacao()
     decidir(fmeca, validacao=rel)
-    assert any("pode estar subestimada" in a for a in rel.avisos)
-    assert any("1.2" in a for a in rel.avisos)
+    avisos = [a for a in rel.avisos if "notas de Ocorrência diferentes" in a]
+    assert len(avisos) == 1
+    assert "1.1: O=2; 1.2: O=9" in avisos[0]
+    assert "modo 1.1 (O=2)" in avisos[0]
 
 
-def test_sem_aviso_quando_o_modo_dimensionante_tem_a_maior_ocorrencia(fmeca_caso):
+def test_aviso_de_ocorrencia_independe_de_qual_modo_tem_o_maior():
+    """Avisa tambem quando o modo que fixa a Criticidade tem o maior O."""
+    from fmeca_spares.leitura import RelatorioValidacao
+
+    fmeca = ler_fmeca(
+        construir_fmeca(
+            componentes=[(1, "Peca", "Pneumático", "F", "Peça", 90, 30, 20)],
+            modos=[
+                (1, "1.1", "Peca", "Pneumático", "Modo A", 6, 5, 3, 90, 30),
+                (1, "1.2", "Peca", "Pneumático", "Modo B", 3, 4, 2, 24, 12),
+            ],
+        )
+    )
+    rel = RelatorioValidacao()
+    decidir(fmeca, validacao=rel)
+    assert any("notas de Ocorrência diferentes" in a for a in rel.avisos)
+
+
+def test_sem_aviso_quando_a_ocorrencia_e_a_mesma_nos_modos(fmeca_caso):
     from fmeca_spares.leitura import RelatorioValidacao
 
     rel = RelatorioValidacao()
     decidir(fmeca_caso, validacao=rel)
-    assert not any("pode estar subestimada" in a for a in rel.avisos)
+    assert not any("notas de Ocorrência diferentes" in a for a in rel.avisos)
 
 
 # -- Deteccao (falha oculta) ------------------------------------------------

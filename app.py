@@ -420,7 +420,8 @@ def _mostrar_erros(validacao: RelatorioValidacao) -> bool:
 def _mostrar_avisos(validacao: RelatorioValidacao) -> None:
     """
     Exibe os avisos. Chamada depois de `decidir`, porque parte deles — o de
-    Ocorrência subestimada pelo modo dimensionante — só existe após o cálculo.
+    Ocorrência diferente entre os modos de um componente — só existe após o
+    cálculo.
     """
     if validacao.avisos:
         with st.expander(

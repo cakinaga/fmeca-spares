@@ -282,19 +282,17 @@ def decidir(
         severidade = modo.severidade if modo else None
         ocorrencia = modo.ocorrencia if modo else None
 
-        ocorrencias = [m.ocorrencia for m in modos if m.ocorrencia is not None]
-        if validacao is not None and ocorrencia is not None and ocorrencias:
-            if max(ocorrencias) > ocorrencia:
-                outro = max(
-                    (m for m in modos if m.ocorrencia == max(ocorrencias)),
-                    key=lambda m: m.criticidade_calculada or 0,
-                )
-                validacao.aviso(
-                    f"componente {comp.id} ({comp.nome}): o modo dimensionante "
-                    f"{modo.sub_id} tem Ocorrência {ocorrencia}, mas o modo "
-                    f"{outro.sub_id} tem {outro.ocorrencia}. A exposição anual usa "
-                    f"a Ocorrência do modo dimensionante e pode estar subestimada"
-                )
+        # A Ocorrencia e atribuida ao componente: todos os modos levam a mesma
+        # nota. Notas diferentes indicam erro de preenchimento.
+        pontuados = [m for m in modos if m.ocorrencia is not None]
+        if validacao is not None and len({m.ocorrencia for m in pontuados}) > 1:
+            notas = "; ".join(f"{m.sub_id}: O={m.ocorrencia}" for m in pontuados)
+            validacao.aviso(
+                f"componente {comp.id} ({comp.nome}): os modos de falha têm "
+                f"notas de Ocorrência diferentes ({notas}). A Ocorrência deve "
+                f"ser a mesma em todos os modos do componente; o cálculo usa a "
+                f"do modo {modo.sub_id} (O={ocorrencia}), que fixa a Criticidade"
+            )
 
         lead = comp.lead_time_dias
         zona, faixa_c, faixa_l = classificar_zona(criticidade, lead, zonas)
