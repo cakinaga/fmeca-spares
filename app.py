@@ -11,14 +11,49 @@ parametros, exibe e exporta.
 from __future__ import annotations
 
 import html
+import importlib
 import math
+import os
+import sys
 from pathlib import Path
 
 import altair as alt
 import pandas as pd
 import streamlit as st
 
-from fmeca_spares import (
+
+def _recarregar_pacote_alterado() -> None:
+    """
+    Recarrega o pacote fmeca_spares quando o codigo dele muda no disco.
+
+    O Streamlit reexecuta app.py a cada interacao, mas nao reimporta os
+    modulos ja carregados. Depois de uma publicacao, o processo continuaria
+    com o pacote antigo na memoria e app.py novo quebraria ao usar um nome
+    novo. Modulos em ordem de dependencia; o __init__ por ultimo.
+    """
+    nomes = ["fmeca_spares.parametros", "fmeca_spares.leitura",
+             "fmeca_spares.modelo", "fmeca_spares.exportacao", "fmeca_spares"]
+    carregados = [sys.modules[n] for n in nomes if n in sys.modules]
+    if not carregados:
+        return
+
+    def mtime(mod) -> float | None:
+        try:
+            return os.path.getmtime(mod.__file__)
+        except (OSError, TypeError):
+            return None
+
+    if all(getattr(m, "_mtime_carga", None) == mtime(m) for m in carregados):
+        return
+    for nome in nomes:
+        if nome in sys.modules:
+            mod = importlib.reload(sys.modules[nome])
+            mod._mtime_carga = mtime(mod)
+
+
+_recarregar_pacote_alterado()
+
+from fmeca_spares import (  # noqa: E402
     DIARIA_UTI_II_SUS,
     DIARIA_UTI_III_SUS,
     SEM_ZONA,
