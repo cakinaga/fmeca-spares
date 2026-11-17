@@ -450,7 +450,7 @@ def _painel_resumo(decisoes, custo: ParametrosCusto) -> None:
             f"{dados['componentes']} componentes",
             _reais(dados["dc_anual_total"]) if custo.declarado else None,
             delta_color="off",
-            help=f"Recomendação: {zona.recomendacao[:1].lower()}{zona.recomendacao[1:]}.",
+            help=f"Recomendação: {_minuscula_inicial(zona.recomendacao)}.",
         )
     sem_zona = resumo[SEM_ZONA]["componentes"]
     total_anual = sum(
@@ -506,6 +506,33 @@ def _grade_zonas(decisoes, zonas: ParametrosZona) -> None:
                 IDs {ids}</div></div>""",
                 unsafe_allow_html=True,
             )
+
+    _legenda_zonas()
+
+
+def _legenda_zonas() -> None:
+    """O que cada zona afirma e a recomendacao de estoque correspondente."""
+    st.markdown("**O que cada zona significa**")
+    for zona in (Zona.PRIORIDADE_ALTA, Zona.PRIORIDADE_MEDIA, Zona.PRIORIDADE_BAIXA):
+        st.markdown(
+            f"""<div style="border-left:4px solid {COR_ZONA[zona]};
+                    padding:.3rem .7rem;margin-bottom:.5rem">
+            <div style="font-weight:600;font-size:.88rem">{zona.rotulo}</div>
+            <div style="font-size:.84rem">{zona.descricao}.
+            <strong>Recomendação:</strong> {_minuscula_inicial(zona.recomendacao)}.</div>
+            </div>""",
+            unsafe_allow_html=True,
+        )
+    st.caption(
+        "A recomendação é uma leitura da prioridade, não a saída do modelo: "
+        "definir níveis de reposição exigiria taxa de consumo e custo de "
+        "posse, que o modelo não tem. Na prioridade média, a entrada efetiva "
+        "em estoque depende do custo de posse do item."
+    )
+
+
+def _minuscula_inicial(texto: str) -> str:
+    return texto[:1].lower() + texto[1:]
 
 
 def _dispersao(decisoes, zonas: ParametrosZona, custo: ParametrosCusto) -> None:
@@ -575,7 +602,11 @@ def _dispersao(decisoes, zonas: ParametrosZona, custo: ParametrosCusto) -> None:
             color=alt.Color("Zona:N", scale=escala, legend=alt.Legend(title="Zona de prioridade", orient="bottom")),
             size=alt.Size(
                 "ExposicaoAnual:Q",
-                legend=alt.Legend(title="Exposição anual (R$)", orient="bottom"),
+                # formato brasileiro: o Vega-Lite separa milhar com virgula
+                legend=alt.Legend(
+                    title="Exposição anual (R$)", orient="bottom",
+                    labelExpr="replace(format(datum.value, ',.0f'), /,/g, '.')",
+                ),
                 scale=alt.Scale(range=[60, 900]),
             )
             if custo.declarado

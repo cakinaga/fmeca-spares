@@ -56,6 +56,17 @@ class Zona(str, Enum):
         }[self]
 
     @property
+    def descricao(self) -> str:
+        """O que a zona afirma sobre a posse antecipada da peca."""
+        return {
+            Zona.PRIORIDADE_ALTA: (
+                "Os dois eixos sustentam a posse antecipada da peça"
+            ),
+            Zona.PRIORIDADE_MEDIA: "Apenas um dos eixos sustenta",
+            Zona.PRIORIDADE_BAIXA: "Nenhum dos eixos sustenta",
+        }[self]
+
+    @property
     def recomendacao(self) -> str:
         """Recomendacao de estoque correspondente a prioridade."""
         return {
