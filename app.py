@@ -526,8 +526,7 @@ def _legenda_zonas() -> None:
     st.caption(
         "A recomendação é uma leitura da prioridade, não a saída do modelo: "
         "definir níveis de reposição exigiria taxa de consumo e custo de "
-        "posse, que o modelo não tem. Na prioridade média, a entrada efetiva "
-        "em estoque depende do custo de posse do item."
+        "posse, que o modelo não tem."
     )
 
 
