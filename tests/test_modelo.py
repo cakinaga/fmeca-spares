@@ -182,7 +182,7 @@ def test_matriz_de_zonas_cobre_as_nove_celulas():
 
 
 def test_zona_e_monotona_nos_dois_eixos():
-    """Subir a Criticidade ou o lead time nunca reduz o compromisso de estoque."""
+    """Subir a Criticidade ou o lead time nunca reduz a prioridade."""
     ordem_c = [FaixaCriticidade.BAIXA, FaixaCriticidade.MEDIA, FaixaCriticidade.ALTA]
     ordem_l = [FaixaLeadTime.CURTO, FaixaLeadTime.MEDIO, FaixaLeadTime.LONGO]
     for i, fc in enumerate(ordem_c):
@@ -196,10 +196,10 @@ def test_zona_e_monotona_nos_dois_eixos():
 
 def test_classificar_zona_nas_quatro_pontas():
     z = ParametrosZona()
-    assert classificar_zona(90, 60, z)[0] is Zona.ESTOQUE_SEGURANCA
-    assert classificar_zona(90, 3, z)[0] is Zona.PONTO_PEDIDO
-    assert classificar_zona(5, 60, z)[0] is Zona.PONTO_PEDIDO
-    assert classificar_zona(5, 3, z)[0] is Zona.SOB_DEMANDA
+    assert classificar_zona(90, 60, z)[0] is Zona.PRIORIDADE_ALTA
+    assert classificar_zona(90, 3, z)[0] is Zona.PRIORIDADE_MEDIA
+    assert classificar_zona(5, 60, z)[0] is Zona.PRIORIDADE_MEDIA
+    assert classificar_zona(5, 3, z)[0] is Zona.PRIORIDADE_BAIXA
 
 
 def test_zona_ausente_sem_criticidade_ou_lead_time():
@@ -234,9 +234,9 @@ def _caso_simples(lead_time_comum=3):
 def test_decidir_atribui_zonas_esperadas():
     fmeca = _caso_simples()
     decisoes = {d.id: d for d in decidir(fmeca)}
-    assert decisoes[1].zona is Zona.ESTOQUE_SEGURANCA
-    assert decisoes[2].zona is Zona.SOB_DEMANDA
-    assert decisoes[3].zona is Zona.SOB_DEMANDA
+    assert decisoes[1].zona is Zona.PRIORIDADE_ALTA
+    assert decisoes[2].zona is Zona.PRIORIDADE_BAIXA
+    assert decisoes[3].zona is Zona.PRIORIDADE_BAIXA
 
 
 def test_lead_time_vem_da_matriz_de_componentes():
@@ -288,6 +288,22 @@ def test_justificativa_menciona_faixas_e_modo():
     assert "1.1" in d.justificativa
 
 
+def test_zona_traz_rotulo_e_recomendacao():
+    assert Zona.PRIORIDADE_ALTA.rotulo == "Prioridade alta"
+    assert Zona.PRIORIDADE_MEDIA.rotulo == "Prioridade média"
+    assert Zona.PRIORIDADE_BAIXA.rotulo == "Prioridade baixa"
+    assert Zona.PRIORIDADE_ALTA.recomendacao == "Manter estoque de segurança local"
+    assert "caso a caso" in Zona.PRIORIDADE_MEDIA.recomendacao
+    assert "sob demanda" in Zona.PRIORIDADE_BAIXA.recomendacao
+
+
+def test_justificativa_cita_prioridade_e_recomendacao():
+    fmeca = _caso_simples()
+    d = {x.id: x for x in decidir(fmeca)}[1]
+    assert "«Prioridade alta»" in d.justificativa
+    assert "Recomendação: manter estoque de segurança local." in d.justificativa
+
+
 def test_resumo_por_zona_soma_e_conta():
     fmeca = _caso_simples()
     custo = ParametrosCusto(
@@ -295,32 +311,31 @@ def test_resumo_por_zona_soma_e_conta():
     )
     decisoes = decidir(fmeca, custo)
     resumo = resumo_por_zona(decisoes)
-    assert resumo[Zona.ESTOQUE_SEGURANCA.rotulo]["componentes"] == 1
-    assert resumo[Zona.PONTO_PEDIDO.rotulo]["componentes"] == 0
-    assert resumo[Zona.SOB_DEMANDA.rotulo]["componentes"] == 2
+    assert resumo[Zona.PRIORIDADE_ALTA.rotulo]["componentes"] == 1
+    assert resumo[Zona.PRIORIDADE_MEDIA.rotulo]["componentes"] == 0
+    assert resumo[Zona.PRIORIDADE_BAIXA.rotulo]["componentes"] == 2
     assert resumo["Sem zona atribuída"]["componentes"] == 0
     total = sum(v["dc_anual_total"] for v in resumo.values())
     assert total == pytest.approx(sum(d.dc_anual_esperado or 0 for d in decisoes))
 
 
-def test_ordenacao_coloca_estoque_de_seguranca_primeiro():
+def test_ordenacao_coloca_prioridade_alta_primeiro():
     fmeca = _caso_simples()
     ordenadas = ordenar_para_relatorio(decidir(fmeca))
-    assert ordenadas[0].zona is Zona.ESTOQUE_SEGURANCA
-    assert ordenadas[-1].zona is Zona.SOB_DEMANDA
+    assert ordenadas[0].zona is Zona.PRIORIDADE_ALTA
+    assert ordenadas[-1].zona is Zona.PRIORIDADE_BAIXA
 
 
-def test_lead_time_longo_sustenta_o_estoque_de_seguranca_sozinho():
+def test_lead_time_longo_sustenta_a_prioridade_alta_sozinho():
     """
-    Elevar o corte de Criticidade nao tira do estoque de seguranca um
-    componente de lead time longo: a celula (media, longo) tambem e estoque de
-    seguranca.
+    Elevar o corte de Criticidade nao tira da prioridade alta um componente de
+    lead time longo: a celula (media, longo) tambem e prioridade alta.
     """
     fmeca = _caso_simples()  # componente 1: Criticidade 60, 45 dias
     frouxo = {d.id: d for d in decidir(fmeca, zonas=ParametrosZona(criticidade_alta=80))}
     assert frouxo[1].faixa_criticidade is FaixaCriticidade.MEDIA
     assert frouxo[1].faixa_lead_time is FaixaLeadTime.LONGO
-    assert frouxo[1].zona is Zona.ESTOQUE_SEGURANCA
+    assert frouxo[1].zona is Zona.PRIORIDADE_ALTA
 
 
 # -- estudo de caso ---------------------------------------------------------
@@ -334,42 +349,43 @@ def test_estudo_de_caso_classifica_todos_os_componentes(fmeca_caso):
 def test_estudo_de_caso_zonas_de_referencia(fmeca_caso):
     """Regressao sobre os limiares padrao e os lead times do estudo de caso."""
     decisoes = {d.id: d for d in decidir(fmeca_caso)}
-    assert decisoes[19].zona is Zona.ESTOQUE_SEGURANCA  # turbina
-    assert decisoes[4].zona is Zona.ESTOQUE_SEGURANCA   # placa de controle (IP)
-    assert decisoes[17].zona is Zona.ESTOQUE_SEGURANCA  # placa principal (VU)
-    assert decisoes[7].zona is Zona.ESTOQUE_SEGURANCA   # sensor de fluxo
-    assert decisoes[8].zona is Zona.ESTOQUE_SEGURANCA   # valvula expiratoria
-    assert decisoes[9].zona is Zona.PONTO_PEDIDO        # entrada de ar
-    assert decisoes[20].zona is Zona.PONTO_PEDIDO       # valvula inspiratoria
-    assert decisoes[1].zona is Zona.SOB_DEMANDA         # circuito, consumivel
-    assert decisoes[5].zona is Zona.SOB_DEMANDA         # rodizios
-    assert decisoes[6].zona is Zona.SOB_DEMANDA         # celula de O2
-    assert decisoes[11].zona is Zona.SOB_DEMANDA        # display
+    assert decisoes[19].zona is Zona.PRIORIDADE_ALTA  # turbina
+    assert decisoes[4].zona is Zona.PRIORIDADE_ALTA   # placa de controle (IP)
+    assert decisoes[17].zona is Zona.PRIORIDADE_ALTA  # placa principal (VU)
+    assert decisoes[7].zona is Zona.PRIORIDADE_ALTA   # sensor de fluxo
+    assert decisoes[8].zona is Zona.PRIORIDADE_ALTA   # valvula expiratoria
+    assert decisoes[14].zona is Zona.PRIORIDADE_ALTA  # sensor de pressao
+    assert decisoes[9].zona is Zona.PRIORIDADE_MEDIA        # entrada de ar
+    assert decisoes[20].zona is Zona.PRIORIDADE_MEDIA       # valvula inspiratoria
+    assert decisoes[6].zona is Zona.PRIORIDADE_MEDIA        # celula de O2
+    assert decisoes[1].zona is Zona.PRIORIDADE_BAIXA         # circuito, consumivel
+    assert decisoes[5].zona is Zona.PRIORIDADE_BAIXA         # rodizios
+    assert decisoes[11].zona is Zona.PRIORIDADE_BAIXA        # display
 
     por_zona = {}
     for d in decisoes.values():
         por_zona[d.zona] = por_zona.get(d.zona, 0) + 1
-    assert por_zona[Zona.ESTOQUE_SEGURANCA] == 6
-    assert por_zona[Zona.PONTO_PEDIDO] == 5
-    assert por_zona[Zona.SOB_DEMANDA] == 9
+    assert por_zona[Zona.PRIORIDADE_ALTA] == 7
+    assert por_zona[Zona.PRIORIDADE_MEDIA] == 5
+    assert por_zona[Zona.PRIORIDADE_BAIXA] == 8
 
 
-def test_estudo_de_caso_corte_mais_alto_reduz_o_estoque_de_seguranca(
+def test_estudo_de_caso_corte_mais_alto_reduz_a_prioridade_alta(
     fmeca_caso
 ):
     apertado = decidir(fmeca_caso, zonas=ParametrosZona(criticidade_alta=40))
     frouxo = decidir(fmeca_caso, zonas=ParametrosZona(criticidade_alta=80))
-    n_apertado = sum(1 for d in apertado if d.zona is Zona.ESTOQUE_SEGURANCA)
-    n_frouxo = sum(1 for d in frouxo if d.zona is Zona.ESTOQUE_SEGURANCA)
-    assert n_apertado == 6
-    assert n_frouxo == 3
+    n_apertado = sum(1 for d in apertado if d.zona is Zona.PRIORIDADE_ALTA)
+    n_frouxo = sum(1 for d in frouxo if d.zona is Zona.PRIORIDADE_ALTA)
+    assert n_apertado == 7
+    assert n_frouxo == 5
     assert n_frouxo < n_apertado
 
 
 def test_estudo_de_caso_exposicao_cresce_com_a_zona(fmeca_caso):
     """
-    A exposicao anual media deve crescer do sob demanda para o estoque de
-    seguranca. E a checagem de que o eixo monetario e o eixo de decisao
+    A exposicao anual media deve crescer da prioridade baixa para a alta.
+    E a checagem de que o eixo monetario e o eixo de decisao
     apontam na mesma direcao.
     """
     custo = ParametrosCusto(
@@ -378,11 +394,11 @@ def test_estudo_de_caso_exposicao_cresce_com_a_zona(fmeca_caso):
     )
     decisoes = decidir(fmeca_caso, custo)
     medias = {}
-    for zona in (Zona.SOB_DEMANDA, Zona.PONTO_PEDIDO, Zona.ESTOQUE_SEGURANCA):
+    for zona in (Zona.PRIORIDADE_BAIXA, Zona.PRIORIDADE_MEDIA, Zona.PRIORIDADE_ALTA):
         itens = [d.dc_anual_esperado for d in decisoes if d.zona is zona]
         medias[zona] = sum(itens) / len(itens)
-    assert medias[Zona.SOB_DEMANDA] < medias[Zona.PONTO_PEDIDO]
-    assert medias[Zona.PONTO_PEDIDO] < medias[Zona.ESTOQUE_SEGURANCA]
+    assert medias[Zona.PRIORIDADE_BAIXA] < medias[Zona.PRIORIDADE_MEDIA]
+    assert medias[Zona.PRIORIDADE_MEDIA] < medias[Zona.PRIORIDADE_ALTA]
 
 
 # -- consistencia entre S, O e o modo dimensionante ------------------------
@@ -449,8 +465,8 @@ def test_oculta_segue_a_escala_de_deteccao():
 def _caso_oculto():
     """
     Componente 1: catastrofico, raro e oculto (S10 O3 D8), Criticidade 30,
-    lead time medio -> ponto de pedido. E o caso que a Criticidade subestima.
-    Componente 2: mesmo modo, mas lead time longo -> estoque de seguranca.
+    lead time medio -> prioridade media. E o caso que a Criticidade subestima.
+    Componente 2: mesmo modo, mas lead time longo -> prioridade alta.
     Componente 3: falha evidente (D2).
     """
     return ler_fmeca(

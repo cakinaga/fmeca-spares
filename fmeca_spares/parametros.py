@@ -32,28 +32,49 @@ def separar_limiares(baixo: int, alto: int, teto: int) -> tuple[int, int]:
 
 
 class Zona(str, Enum):
-    """Zonas de decisao de estoque da Etapa 2."""
+    """
+    Zonas de prioridade da Etapa 2.
 
-    ESTOQUE_SEGURANCA = "Estoque de seguranca local"
-    PONTO_PEDIDO = "Ponto de pedido"
-    SOB_DEMANDA = "Compra sob demanda"
+    A zona diz quantos dos dois eixos (Criticidade e lead time) sustentam a
+    posse antecipada da peca: os dois (alta), apenas um (media) ou nenhum
+    (baixa). A recomendacao de estoque e uma leitura da prioridade, nao a
+    saida do modelo, que nao dispoe de taxa de consumo nem de custo de posse
+    para definir niveis de reposicao.
+    """
+
+    PRIORIDADE_ALTA = "Prioridade alta"
+    PRIORIDADE_MEDIA = "Prioridade media"
+    PRIORIDADE_BAIXA = "Prioridade baixa"
 
     @property
     def rotulo(self) -> str:
         """Rotulo acentuado, para exibicao."""
         return {
-            Zona.ESTOQUE_SEGURANCA: "Estoque de segurança local",
-            Zona.PONTO_PEDIDO: "Ponto de pedido",
-            Zona.SOB_DEMANDA: "Compra sob demanda",
+            Zona.PRIORIDADE_ALTA: "Prioridade alta",
+            Zona.PRIORIDADE_MEDIA: "Prioridade média",
+            Zona.PRIORIDADE_BAIXA: "Prioridade baixa",
+        }[self]
+
+    @property
+    def recomendacao(self) -> str:
+        """Recomendacao de estoque correspondente a prioridade."""
+        return {
+            Zona.PRIORIDADE_ALTA: "Manter estoque de segurança local",
+            Zona.PRIORIDADE_MEDIA: (
+                "Avaliar caso a caso a incorporação ao estoque de segurança local"
+            ),
+            Zona.PRIORIDADE_BAIXA: (
+                "Compra sob demanda, com baixo risco de indisponibilidade"
+            ),
         }[self]
 
     @property
     def ordem(self) -> int:
-        """Ordem crescente de compromisso de estoque (0 = menor)."""
+        """Ordem crescente de prioridade (0 = menor)."""
         return {
-            Zona.SOB_DEMANDA: 0,
-            Zona.PONTO_PEDIDO: 1,
-            Zona.ESTOQUE_SEGURANCA: 2,
+            Zona.PRIORIDADE_BAIXA: 0,
+            Zona.PRIORIDADE_MEDIA: 1,
+            Zona.PRIORIDADE_ALTA: 2,
         }[self]
 
 
@@ -190,7 +211,7 @@ class ParametrosDeteccao:
     """
     Limiar de falha oculta, lido da nota de Deteccao de cada modo de falha.
 
-    Nao altera a zona de estoque: so marca, na justificativa, os modos com D
+    Nao altera a zona de prioridade: so marca, na justificativa, os modos com D
     a partir de `limiar_oculta` (padrao 7, falha oculta ate o uso critico na
     escala de Deteccao do formulario).
     """

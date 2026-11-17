@@ -61,9 +61,9 @@ AZUL = "1F3864"
 FINA = Side(style="thin", color="BFBFBF")
 
 COR_ZONA = {
-    Zona.ESTOQUE_SEGURANCA: "F4CCCC",
-    Zona.PONTO_PEDIDO: "FFF2CC",
-    Zona.SOB_DEMANDA: "D9EAD3",
+    Zona.PRIORIDADE_ALTA: "F4CCCC",
+    Zona.PRIORIDADE_MEDIA: "FFF2CC",
+    Zona.PRIORIDADE_BAIXA: "D9EAD3",
 }
 
 COLUNAS = [
@@ -79,7 +79,8 @@ COLUNAS = [
     ("Lead time (dias)", 12, "lead_time"),
     ("Faixa de criticidade", 14, "faixa_c"),
     ("Faixa de lead time", 13, "faixa_l"),
-    ("Zona de estoque", 24, "zona"),
+    ("Zona de prioridade", 18, "zona"),
+    ("Recomendação", 36, "recomendacao"),
     ("λ (falha/ano/unidade)", 14, "taxa"),
     ("DC evitável por evento (R$)", 16, "dc"),
     ("DC anual esperado (R$)", 16, "dc_anual"),
@@ -116,6 +117,8 @@ def _celula_valor(d: DecisaoComponente, chave: str):
         return d.faixa_lead_time.rotulo if d.faixa_lead_time else None
     if chave == "zona":
         return d.zona.rotulo if d.zona else SEM_ZONA
+    if chave == "recomendacao":
+        return d.zona.recomendacao if d.zona else None
     if chave == "taxa":
         return d.taxa_falha_anual
     if chave == "dc":
@@ -141,7 +144,7 @@ def _aba_decisao(wb: Workbook, fmeca: FMECA, decisoes: Sequence[DecisaoComponent
     ws = wb.active
     ws.title = "Decisão"
 
-    t = ws.cell(1, 1, "Decisão de estoque de spare parts — Etapa 2")
+    t = ws.cell(1, 1, "Prioridade de estoque de spare parts — Etapa 2")
     t.font = Font(bold=True, size=13, color=AZUL)
     ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(COLUNAS))
 
@@ -164,7 +167,7 @@ def _aba_decisao(wb: Workbook, fmeca: FMECA, decisoes: Sequence[DecisaoComponent
             if chave in {"id", "severidade", "ocorrencia", "criticidade", "rpn",
                          "lead_time", "faixa_c", "faixa_l"}:
                 cel.alignment = Alignment(horizontal="center")
-            elif chave in {"nome", "subsistema", "modo", "justificativa"}:
+            elif chave in {"nome", "subsistema", "modo", "recomendacao", "justificativa"}:
                 cel.alignment = Alignment(wrap_text=True, vertical="top")
             if chave in {"dc", "dc_anual"}:
                 cel.number_format = "#,##0.00"
@@ -180,8 +183,8 @@ def _aba_decisao(wb: Workbook, fmeca: FMECA, decisoes: Sequence[DecisaoComponent
 def _aba_resumo(wb: Workbook, decisoes: Sequence[DecisaoComponente]) -> None:
     ws = wb.create_sheet("Resumo")
     for col, (titulo, largura) in enumerate(
-        [("Zona", 28), ("Componentes", 13), ("DC anual esperado (R$)", 20),
-         ("DC evitável por evento (R$)", 22), ("IDs", 34)],
+        [("Zona de prioridade", 22), ("Componentes", 13), ("DC anual esperado (R$)", 20),
+         ("DC evitável por evento (R$)", 22), ("IDs", 34), ("Recomendação", 44)],
         start=1,
     ):
         cel = ws.cell(1, col, titulo)
@@ -191,12 +194,15 @@ def _aba_resumo(wb: Workbook, decisoes: Sequence[DecisaoComponente]) -> None:
         ws.column_dimensions[get_column_letter(col)].width = largura
     ws.row_dimensions[1].height = 30
 
+    recomendacoes = {z.rotulo: z.recomendacao for z in Zona}
     for i, (zona, dados) in enumerate(resumo_por_zona(decisoes).items(), start=2):
         ws.cell(i, 1, zona).font = Font(size=10, bold=True)
         ws.cell(i, 2, dados["componentes"]).alignment = Alignment(horizontal="center")
         ws.cell(i, 3, dados["dc_anual_total"]).number_format = "#,##0.00"
         ws.cell(i, 4, dados["dc_evitavel_total"]).number_format = "#,##0.00"
         ws.cell(i, 5, ", ".join(str(x) for x in dados["ids"]))
+        rec = ws.cell(i, 6, recomendacoes.get(zona))
+        rec.alignment = Alignment(wrap_text=True, vertical="top")
 
 
 def _aba_parametros(
@@ -264,7 +270,7 @@ def _aba_parametros(
 
     secao("Detecção")
     item("D a partir da qual a falha é oculta", deteccao.limiar_oculta,
-         "Marca o modo na justificativa. Não altera a zona de estoque.")
+         "Marca o modo na justificativa. Não altera a zona de prioridade.")
 
 
 def _aba_validacao(wb: Workbook, validacao: RelatorioValidacao) -> None:

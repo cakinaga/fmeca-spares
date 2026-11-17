@@ -364,6 +364,24 @@ def test_escala_alterada_na_tabela_muda_a_taxa_de_falha():
     assert d.taxa_falha_anual == 5.0
 
 
+def test_escala_escrita_com_simbolos():
+    tabela = [list(l) for l in TABELA_OCORRENCIA]
+    tabela[2][1] = "Falha muito rara: λ < 0,5 falha/ano por unidade"
+    tabela[3][1] = "Falha rara: 0,5 ≤ λ < 1,0 falha/ano por unidade"
+    tabela[4][1] = "Falha ocasional: 1,0 ≤ λ < 2,0 falhas/ano por unidade"
+    tabela[5][1] = "Falha frequente: 2,0 ≤ λ < 4,0 falhas/ano por unidade"
+    tabela[6][1] = "Falha muito frequente: λ ≥ 4,0 falhas/ano por unidade"
+    fmeca = _com_tabela(tabela)
+    assert fmeca.escala_ocorrencia == (
+        (1, 2, 0.0, 0.5),
+        (3, 4, 0.5, 1.0),
+        (5, 6, 1.0, 2.0),
+        (7, 8, 2.0, 4.0),
+        (9, 10, 4.0, 4.0),
+    )
+    assert fmeca.validacao.avisos == []
+
+
 def test_sem_aba_tabela_usa_escala_padrao_com_aviso():
     fmeca = _com_tabela(None)
     assert fmeca.escala_ocorrencia is None
@@ -387,4 +405,10 @@ def test_escala_com_lacuna_usa_escala_padrao_com_aviso():
 
 
 def test_estudo_de_caso_le_a_escala_da_tabela(fmeca_caso):
-    assert fmeca_caso.escala_ocorrencia == ParametrosOcorrencia().faixas
+    assert fmeca_caso.escala_ocorrencia == (
+        (1, 2, 0.0, 0.5),
+        (3, 4, 0.5, 1.0),
+        (5, 6, 1.0, 2.0),
+        (7, 8, 2.0, 4.0),
+        (9, 10, 4.0, 4.0),
+    )

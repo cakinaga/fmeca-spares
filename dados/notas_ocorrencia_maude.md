@@ -74,11 +74,11 @@ Downtime Cost, converte cada nota O em uma taxa de falha anual por equipamento
 
 | Nota O | λ (falha/ano por equipamento) |
 |:---:|---|
-| 1–2 | abaixo de 0,5 |
-| 3–4 | de 0,5 a 0,9 |
-| 5–6 | de 1,0 a 1,9 |
-| 7–8 | de 2,0 a 3,9 |
-| 9–10 | 4,0 ou mais |
+| 1–2 | λ < 0,5 |
+| 3–4 | 0,5 ≤ λ < 1,0 |
+| 5–6 | 1,0 ≤ λ < 2,0 |
+| 7–8 | 2,0 ≤ λ < 4,0 |
+| 9–10 | λ ≥ 4,0 |
 
 São duas etapas distintas: a proporção no MAUDE ordena e pontua os
 componentes; a escala de λ traduz essa pontuação em frequência anual. O MAUDE

@@ -3,12 +3,13 @@
 **Interface online:** <https://fmeca-spares.streamlit.app> — abre no navegador,
 sem instalação, com o estudo de caso de demonstração carregado.
 
-Modelo de decisão para estoque de peças de reposição na Engenharia Clínica,
+Modelo de priorização do estoque de peças de reposição na Engenharia Clínica,
 baseado em FMECA e lead time. Implementa a **Etapa 2** da estrutura
-metodológica: a decisão de estoque componente a componente, a partir do
-cruzamento entre a Criticidade do FMECA e o lead time de fornecimento. O
-Downtime Cost quantifica a exposição anual à falta de cada peça e ordena os
-componentes dentro de cada zona, sem alterar a zona.
+metodológica: a zona de prioridade de cada componente — alta, média ou
+baixa —, a partir do cruzamento entre a Criticidade do FMECA e o lead time de
+fornecimento, com a recomendação de estoque correspondente. O Downtime Cost
+quantifica a exposição anual à falta de cada peça e ordena os componentes
+dentro de cada zona, sem alterar a zona.
 
 O repositório tem duas partes independentes:
 
@@ -62,7 +63,7 @@ for d in ordenar_para_relatorio(decisoes):
 
 ## Como o modelo decide
 
-A decisão sai de dois eixos.
+A zona de prioridade sai de dois eixos.
 
 **Eixo de exposição — Criticidade (S × O).** O maior produto entre Severidade
 e Ocorrência entre os modos de falha do componente. A Detecção fica fora deste
@@ -75,20 +76,38 @@ para voltar à operação.
 parado *a mais* por não haver a peça em estoque. Vem da coluna `Lead time
 (dias)` da aba «Matriz de componentes».
 
-O cruzamento das duas faixas produz a matriz de zonas:
+O cruzamento das duas faixas produz a matriz de zonas de prioridade:
 
 |                       | Lead time curto | Lead time médio | Lead time longo |
 | --------------------- | --------------- | --------------- | --------------- |
-| **Criticidade alta**  | Ponto de pedido | Estoque de segurança local | Estoque de segurança local |
-| **Criticidade média** | Compra sob demanda | Ponto de pedido | Estoque de segurança local |
-| **Criticidade baixa** | Compra sob demanda | Compra sob demanda | Ponto de pedido |
+| **Criticidade alta**  | Prioridade média | Prioridade alta | Prioridade alta |
+| **Criticidade média** | Prioridade baixa | Prioridade média | Prioridade alta |
+| **Criticidade baixa** | Prioridade baixa | Prioridade baixa | Prioridade média |
+
+Cada zona diz quantos dos dois eixos sustentam a posse antecipada da peça, e
+traz uma recomendação de estoque que é leitura dessa prioridade, não a saída
+do modelo:
+
+| Zona | O modelo afirma | Recomendação |
+| --- | --- | --- |
+| **Prioridade alta** | os dois eixos sustentam a posse antecipada da peça | manter estoque de segurança local |
+| **Prioridade média** | apenas um dos eixos sustenta | avaliar caso a caso a incorporação ao estoque de segurança local |
+| **Prioridade baixa** | nenhum dos eixos sustenta | compra sob demanda, com baixo risco de indisponibilidade |
+
+A matriz não atribui políticas de reposição. Na teoria de estoques, o ponto de
+pedido não é alternativa ao estoque de segurança, mas o contém (ponto de
+pedido = demanda durante o lead time + estoque de segurança), e definir níveis
+de reposição exige taxa de consumo e custo de posse, que o modelo não tem.
 
 A matriz é monótona nos dois eixos: subir a Criticidade ou o lead time nunca
-reduz o compromisso de estoque. Duas leituras da diagonal merecem registro:
-criticidade alta com fornecimento em menos de uma semana não exige peça
-parada, apenas ressuprimento programado; e lead time longo sustenta o estoque
-de segurança sozinho a partir da faixa média de Criticidade, porque mais de um
-mês de equipamento indisponível não se recupera com pedido de compra.
+reduz a prioridade. Duas leituras merecem registro. Na zona média, apenas um
+dos eixos sustenta a posse: criticidade alta com fornecimento em menos de uma
+semana, ou criticidade baixa com fornecimento longo. A entrada efetiva da peça
+em estoque depende então do custo de posse do item, que o modelo não
+monetiza, e por isso a recomendação é avaliar caso a caso. Já o lead time
+longo sustenta a prioridade alta sozinho a partir da faixa média de
+Criticidade, porque mais de um mês de equipamento indisponível não se
+recupera com pedido de compra.
 
 **Consumíveis.** Componentes com `Natureza` = Consumível seguem a mesma matriz
 das peças: a zona sai só da Criticidade e do lead time. A Natureza é lida e
@@ -153,15 +172,15 @@ DC_anual = DC_evitável × λ(O) × frota_equipamentos
 
 λ não é estimado a partir dos dados: ele é lido da própria escala de Ocorrência
 que o analista usou para pontuar, declarada na aba «Tabela» do formulário
-FMECA.
+FMECA. A escala do estudo de caso:
 
 | Nota de Ocorrência | λ declarado na escala (falha/ano por unidade) |
 | --- | --- |
-| 1–2 | abaixo de 0,5 |
-| 3–4 | 0,5 a 0,9 |
-| 5–6 | 1,0 a 1,9 |
-| 7–8 | 2,0 a 3,9 |
-| 9–10 | acima de 4,0 |
+| 1–2 | λ < 0,5 |
+| 3–4 | 0,5 ≤ λ < 1,0 |
+| 5–6 | 1,0 ≤ λ < 2,0 |
+| 7–8 | 2,0 ≤ λ < 4,0 |
+| 9–10 | λ ≥ 4,0 |
 
 A faixa aberta embaixo recebe piso 0, limite natural de uma taxa. A faixa
 aberta em cima (O 9–10) não tem teto na escala e é tomada no próprio piso,
@@ -170,11 +189,12 @@ em vez de supor um teto que a escala não declara.
 
 As faixas são **lidas da aba «Tabela»** do formulário, na seção de Ocorrência:
 uma linha por faixa de notas ("1–2", "3–4"…), com a taxa no texto da
-descrição ("abaixo de 0,5", "entre 0,5 e 0,9", "acima de 4,0"). Alterar a
-escala na planilha altera o cálculo. Se a aba não existir, se alguma taxa não
-puder ser lida ou se as faixas não cobrirem as notas de 1 a 10 sem lacunas, o
-modelo usa a escala padrão (`ParametrosOcorrencia.faixas`, a da tabela acima)
-e a conferência registra um aviso. A interface mostra a escala em uso, e a aba
+descrição, por extenso ("abaixo de 0,5", "entre 0,5 e 0,9", "acima de 4,0")
+ou com símbolos ("λ < 0,5", "0,5 ≤ λ < 1,0", "λ ≥ 4,0"). Alterar a escala na
+planilha altera o cálculo. Se a aba não existir, se alguma taxa não puder ser
+lida ou se as faixas não cobrirem as notas de 1 a 10 sem lacunas, o modelo usa
+a escala padrão (`ParametrosOcorrencia.faixas`: abaixo de 0,5; 0,5 a 0,9; 1,0
+a 1,9; 2,0 a 3,9; acima de 4,0) e a conferência registra um aviso. A interface mostra a escala em uso, e a aba
 «Parâmetros» da planilha exportada registra a origem dela.
 
 Dentro de cada faixa, a interface oferece dois valores de λ: a **média** da
@@ -186,7 +206,7 @@ módulo, `posicao_na_faixa` aceita qualquer valor de 0 (piso) a 1 (teto).
 
 ## Falha oculta (Detecção)
 
-A Detecção fica fora da decisão de estoque e não reclassifica nenhum
+A Detecção fica fora da zona de prioridade e não reclassifica nenhum
 componente. Ela só marca os modos de falha oculta: pela escala de Detecção da
 aba «Tabela» do formulário, a partir de D = 7 a falha só aparece no uso
 crítico, ou só é percebida pela consequência.
@@ -264,9 +284,9 @@ subsistema:
 | Proteção | 15 |
 | Elétrico | 15 |
 | Mecânico | 30 |
-| Sensoriamento | 30 |
 | Pneumático | 30 |
-| Controle e eletrônica | 60 |
+| Sensoriamento | 60 |
+| Eletrônico | 60 |
 
 São prazos de referência por tipo de peça, não prazos de fornecedores
 específicos: substitua-os pelos prazos realizados nas compras do hospital
@@ -302,7 +322,7 @@ isso de forma explícita.
 fmeca_spares/
   parametros.py    faixas, limiares, custo de leito bloqueado e Detecção, com validação
   leitura.py       leitura e conferência do formulário FMECA
-  modelo.py        Downtime Cost, matriz de zonas, decisão por componente
+  modelo.py        Downtime Cost, matriz de zonas de prioridade, resultado por componente
   exportacao.py    planilha de resultado, resumo, parâmetros e validação
 app.py             interface Streamlit
 dados/             formulário FMECA do estudo de caso e registro das notas de Ocorrência
@@ -325,10 +345,11 @@ mudança a ser deliberada.
 
 ## Limitações
 
-- **O modelo decide o quê estocar, não quanto.** As zonas dizem se a peça deve
-  estar na prateleira, ser ressuprida por ponto de pedido ou comprada sob
-  demanda. O dimensionamento da quantidade e do ponto de reposição exige a
-  distribuição da demanda, que o modelo não estima.
+- **O modelo prioriza o quê estocar, não quanto.** As zonas dizem quão
+  fortemente os dois eixos sustentam a posse antecipada da peça. O
+  dimensionamento da quantidade, do estoque de segurança e do ponto de
+  reposição exige a distribuição da demanda e o custo de posse, que o modelo
+  não estima.
 - **A Ocorrência do estudo de caso vem de notificações, não de histórico de
   manutenção.** Sem o tamanho da frota notificante, não há denominador para
   uma taxa de falha por unidade-ano; a nota é um ordenamento relativo entre

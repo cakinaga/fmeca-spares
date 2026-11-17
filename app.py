@@ -1,5 +1,5 @@
 """
-Interface do modelo de decisao de estoque de spare parts (Etapa 2).
+Interface do modelo de prioridade de estoque de spare parts (Etapa 2).
 
 Rodar com:
     streamlit run app.py
@@ -50,9 +50,9 @@ DADOS = RAIZ / "dados"
 FMECA_EXEMPLO = DADOS / "matriz_componentes_ventilador_uti.xlsx"
 
 COR_ZONA = {
-    Zona.ESTOQUE_SEGURANCA: "#c0392b",
-    Zona.PONTO_PEDIDO: "#d4a017",
-    Zona.SOB_DEMANDA: "#4a7c59",
+    Zona.PRIORIDADE_ALTA: "#c0392b",
+    Zona.PRIORIDADE_MEDIA: "#d4a017",
+    Zona.PRIORIDADE_BAIXA: "#4a7c59",
 }
 # Tamanhos de fonte que o tema (.streamlit/config.toml) nao permite definir:
 # texto da barra lateral e valores do painel-resumo.
@@ -221,7 +221,7 @@ def _parametros_deteccao() -> ParametrosDeteccao:
                 "A partir deste valor a falha só aparece no uso crítico, e o "
                 "modo é sinalizado na justificativa do componente. O padrão "
                 "segue a escala de Detecção da aba «Tabela». Não altera a zona "
-                "de estoque."
+                "de prioridade."
             ),
         )
 
@@ -407,18 +407,15 @@ def _rodape(validacao: RelatorioValidacao) -> None:
 def _painel_resumo(decisoes, custo: ParametrosCusto) -> None:
     resumo = resumo_por_zona(decisoes)
     colunas = st.columns(4)
-    ordem = [
-        Zona.ESTOQUE_SEGURANCA.rotulo,
-        Zona.PONTO_PEDIDO.rotulo,
-        Zona.SOB_DEMANDA.rotulo,
-    ]
+    ordem = [Zona.PRIORIDADE_ALTA, Zona.PRIORIDADE_MEDIA, Zona.PRIORIDADE_BAIXA]
     for col, zona in zip(colunas, ordem):
-        dados = resumo[zona]
+        dados = resumo[zona.rotulo]
         col.metric(
-            zona,
+            zona.rotulo,
             f"{dados['componentes']} componentes",
             _reais(dados["dc_anual_total"]) if custo.declarado else None,
             delta_color="off",
+            help=f"Recomendação: {zona.recomendacao[:1].lower()}{zona.recomendacao[1:]}.",
         )
     sem_zona = resumo[SEM_ZONA]["componentes"]
     total_anual = sum(
@@ -502,15 +499,15 @@ def _dispersao(decisoes, zonas: ParametrosZona, custo: ParametrosCusto) -> None:
     df = pd.DataFrame(linhas)
 
     escala = alt.Scale(
-        domain=[z.rotulo for z in (Zona.ESTOQUE_SEGURANCA, Zona.PONTO_PEDIDO, Zona.SOB_DEMANDA)],
-        range=[COR_ZONA[Zona.ESTOQUE_SEGURANCA], COR_ZONA[Zona.PONTO_PEDIDO], COR_ZONA[Zona.SOB_DEMANDA]],
+        domain=[z.rotulo for z in (Zona.PRIORIDADE_ALTA, Zona.PRIORIDADE_MEDIA, Zona.PRIORIDADE_BAIXA)],
+        range=[COR_ZONA[Zona.PRIORIDADE_ALTA], COR_ZONA[Zona.PRIORIDADE_MEDIA], COR_ZONA[Zona.PRIORIDADE_BAIXA]],
     )
     # dominios fixos, para que o sombreado chegue a borda do grafico
     teto_y = math.ceil(max(df["LeadTime"].max(), zonas.lead_time_longo_dias) * 1.1 / 10) * 10
     eixo_x = alt.Scale(domain=[0, TETO_CRITICIDADE], nice=False)
     eixo_y = alt.Scale(domain=[0, teto_y], nice=False)
 
-    # celulas de estoque de seguranca: Alta x (Medio, Longo) e Media x Longo
+    # celulas de prioridade alta: Alta x (Medio, Longo) e Media x Longo
     regioes = pd.DataFrame(
         {
             "x": [zonas.criticidade_alta, zonas.criticidade_media],
@@ -521,7 +518,7 @@ def _dispersao(decisoes, zonas: ParametrosZona, custo: ParametrosCusto) -> None:
     )
     sombreado = (
         alt.Chart(regioes)
-        .mark_rect(color=COR_ZONA[Zona.ESTOQUE_SEGURANCA], opacity=0.08)
+        .mark_rect(color=COR_ZONA[Zona.PRIORIDADE_ALTA], opacity=0.08)
         .encode(
             x=alt.X("x:Q", scale=eixo_x), x2="x2:Q",
             y=alt.Y("y:Q", scale=eixo_y), y2="y2:Q",
@@ -529,9 +526,9 @@ def _dispersao(decisoes, zonas: ParametrosZona, custo: ParametrosCusto) -> None:
     )
     rotulo = (
         alt.Chart(pd.DataFrame({"x": [TETO_CRITICIDADE], "y": [teto_y],
-                                "t": [Zona.ESTOQUE_SEGURANCA.rotulo.lower()]}))
+                                "t": [Zona.PRIORIDADE_ALTA.rotulo.lower()]}))
         .mark_text(align="right", baseline="top", dx=-4, dy=4, fontSize=11,
-                   color=COR_ZONA[Zona.ESTOQUE_SEGURANCA])
+                   color=COR_ZONA[Zona.PRIORIDADE_ALTA])
         .encode(x=alt.X("x:Q", scale=eixo_x), y=alt.Y("y:Q", scale=eixo_y), text="t:N")
     )
     pontos = (
@@ -540,7 +537,7 @@ def _dispersao(decisoes, zonas: ParametrosZona, custo: ParametrosCusto) -> None:
         .encode(
             x=alt.X("Criticidade:Q", title="Criticidade (S × O)", scale=eixo_x),
             y=alt.Y("LeadTime:Q", title="Lead time (dias)", scale=eixo_y),
-            color=alt.Color("Zona:N", scale=escala, legend=alt.Legend(title="Zona de estoque", orient="bottom")),
+            color=alt.Color("Zona:N", scale=escala, legend=alt.Legend(title="Zona de prioridade", orient="bottom")),
             size=alt.Size(
                 "ExposicaoAnual:Q",
                 legend=alt.Legend(title="Exposição anual (R$)", orient="bottom"),
@@ -586,6 +583,7 @@ def _tabela(decisoes, custo: ParametrosCusto) -> None:
                 "RPN": d.rpn,
                 "Lead time (dias)": d.lead_time_dias,
                 "Zona": d.zona.rotulo if d.zona else SEM_ZONA,
+                "Recomendação": d.zona.recomendacao if d.zona else "—",
                 "λ (falha/ano)": d.taxa_falha_anual,
                 "DC por evento (R$)": d.dc_evitavel,
                 "DC anual (R$)": d.dc_anual_esperado,
@@ -679,7 +677,7 @@ def _criticidade_deteccao(fmeca, decisoes, zonas: ParametrosZona,
         columns=["Criticidade", "D", "Quantidade"],
     )
 
-    zonas_ord = (Zona.ESTOQUE_SEGURANCA, Zona.PONTO_PEDIDO, Zona.SOB_DEMANDA)
+    zonas_ord = (Zona.PRIORIDADE_ALTA, Zona.PRIORIDADE_MEDIA, Zona.PRIORIDADE_BAIXA)
     escala = alt.Scale(
         domain=[z.rotulo for z in zonas_ord] + [SEM_ZONA],
         range=[COR_ZONA[z] for z in zonas_ord] + [COR_SEM_ZONA],
@@ -753,13 +751,14 @@ def main() -> None:
     st.html(CSS_BARRA_LATERAL)
     st.title("Estoque de spare parts na Engenharia Clínica")
     st.caption(
-        "Decisão de estoque de peças de reposição a partir do FMECA do "
+        "Prioridade de estoque de peças de reposição a partir do FMECA do "
         "equipamento: para cada componente, o cruzamento entre a Criticidade "
-        "(S × O) e o prazo de fornecimento (lead time) indica estoque de "
-        "segurança local, ponto de pedido ou compra sob demanda. O custo de "
-        "indisponibilidade (Downtime Cost) estima a exposição anual esperada "
-        "da unidade e prioriza os componentes dentro de cada zona, sem alterar "
-        "a zona."
+        "(S × O) e o prazo de fornecimento (lead time) atribui prioridade "
+        "alta, média ou baixa, conforme os dois eixos, apenas um ou nenhum "
+        "sustentem a posse antecipada da peça. Cada zona traz a recomendação "
+        "de estoque correspondente. O custo de indisponibilidade (Downtime "
+        "Cost) estima a exposição anual esperada da unidade e ordena os "
+        "componentes dentro de cada zona, sem alterar a zona."
     )
 
     arquivo_fmeca = _carregar_entradas()

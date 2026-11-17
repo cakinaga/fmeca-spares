@@ -402,8 +402,8 @@ def ler_fmeca(origem: str | Path | BinaryIO) -> FMECA:
 _NOTAS = re.compile(r"^(\d{1,2})(?:\s*(?:[-–—]|a|ate)\s*(\d{1,2}))?$")
 _NUMERO = re.compile(r"\d+(?:[.,]\d+)?")
 # palavras inteiras, para que "ate" nao case dentro de "material"
-_ACIMA = re.compile(r"\b(?:acima|maior|superior|mais de)\b|>")
-_ABAIXO = re.compile(r"\b(?:abaixo|menor|inferior|menos de|ate)\b|<")
+_ACIMA = re.compile(r"\b(?:acima|maior|superior|mais de)\b|[>≥]")
+_ABAIXO = re.compile(r"\b(?:abaixo|menor|inferior|menos de|ate)\b|[<≤]")
 
 
 def _faixa_de_notas(valor: Any) -> tuple[int, int] | None:
@@ -420,8 +420,9 @@ def _faixa_de_notas(valor: Any) -> tuple[int, int] | None:
 
 def _taxa_do_texto(texto: str) -> tuple[float, float] | None:
     """
-    Le o intervalo de lambda na descricao de uma nota: "entre 0,5 e 1,0" da
-    (0,5; 1,0), "abaixo de 0,5" da (0; 0,5) e "acima de 3,0" da (3,0; 3,0).
+    Le o intervalo de lambda na descricao de uma nota: "entre 0,5 e 1,0" ou
+    "0,5 ≤ λ < 1,0" da (0,5; 1,0), "abaixo de 0,5" ou "λ < 0,5" da (0; 0,5)
+    e "acima de 3,0" ou "λ ≥ 3,0" da (3,0; 3,0).
     """
     n = normalizar(texto)
     numeros = [float(x.replace(",", ".")) for x in _NUMERO.findall(n)]

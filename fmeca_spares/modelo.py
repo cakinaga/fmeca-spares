@@ -1,7 +1,7 @@
 """
 Modelo de decisao da Etapa 2: Criticidade do FMECA x lead time de fornecimento.
 
-A decisao de estoque de cada componente sai do cruzamento de dois eixos:
+A zona de prioridade de cada componente sai do cruzamento de dois eixos:
 
   eixo de exposicao    Criticidade = S x O, o maior valor entre os modos de
                        falha do componente. A Deteccao fica fora deste eixo
@@ -38,15 +38,15 @@ from .parametros import (
 
 # Matriz de zonas. Linha = faixa de Criticidade, coluna = faixa de lead time.
 MATRIZ_ZONAS: dict[tuple[FaixaCriticidade, FaixaLeadTime], Zona] = {
-    (FaixaCriticidade.ALTA, FaixaLeadTime.CURTO): Zona.PONTO_PEDIDO,
-    (FaixaCriticidade.ALTA, FaixaLeadTime.MEDIO): Zona.ESTOQUE_SEGURANCA,
-    (FaixaCriticidade.ALTA, FaixaLeadTime.LONGO): Zona.ESTOQUE_SEGURANCA,
-    (FaixaCriticidade.MEDIA, FaixaLeadTime.CURTO): Zona.SOB_DEMANDA,
-    (FaixaCriticidade.MEDIA, FaixaLeadTime.MEDIO): Zona.PONTO_PEDIDO,
-    (FaixaCriticidade.MEDIA, FaixaLeadTime.LONGO): Zona.ESTOQUE_SEGURANCA,
-    (FaixaCriticidade.BAIXA, FaixaLeadTime.CURTO): Zona.SOB_DEMANDA,
-    (FaixaCriticidade.BAIXA, FaixaLeadTime.MEDIO): Zona.SOB_DEMANDA,
-    (FaixaCriticidade.BAIXA, FaixaLeadTime.LONGO): Zona.PONTO_PEDIDO,
+    (FaixaCriticidade.ALTA, FaixaLeadTime.CURTO): Zona.PRIORIDADE_MEDIA,
+    (FaixaCriticidade.ALTA, FaixaLeadTime.MEDIO): Zona.PRIORIDADE_ALTA,
+    (FaixaCriticidade.ALTA, FaixaLeadTime.LONGO): Zona.PRIORIDADE_ALTA,
+    (FaixaCriticidade.MEDIA, FaixaLeadTime.CURTO): Zona.PRIORIDADE_BAIXA,
+    (FaixaCriticidade.MEDIA, FaixaLeadTime.MEDIO): Zona.PRIORIDADE_MEDIA,
+    (FaixaCriticidade.MEDIA, FaixaLeadTime.LONGO): Zona.PRIORIDADE_ALTA,
+    (FaixaCriticidade.BAIXA, FaixaLeadTime.CURTO): Zona.PRIORIDADE_BAIXA,
+    (FaixaCriticidade.BAIXA, FaixaLeadTime.MEDIO): Zona.PRIORIDADE_BAIXA,
+    (FaixaCriticidade.BAIXA, FaixaLeadTime.LONGO): Zona.PRIORIDADE_MEDIA,
 }
 
 
@@ -97,7 +97,7 @@ def classificar_zona(
     zonas: ParametrosZona,
 ) -> tuple[Zona | None, FaixaCriticidade | None, FaixaLeadTime | None]:
     """
-    Classifica um componente em uma zona de estoque.
+    Classifica um componente em uma zona de prioridade.
 
     Devolve a zona e as duas faixas. Zona None quando falta Criticidade ou
     lead time.
@@ -186,7 +186,8 @@ def _justificar(
     partes = [
         f"Criticidade {criticidade} ({faixa_c.rotulo.lower()}) "
         f"e lead time de {_fmt_dias(lead_time)} ({faixa_l.rotulo.lower()}) "
-        f"situam o componente em «{zona.rotulo}»."
+        f"situam o componente em «{zona.rotulo}». "
+        f"Recomendação: {_minuscula_inicial(zona.recomendacao)}."
     ]
     if modo is not None and modo.modo:
         partes.append(
@@ -209,6 +210,10 @@ def _alerta_oculta(modos: Sequence[ModoDeFalha]) -> str:
         "antecipa a descoberta da falha, que só aparece no uso crítico; "
         "inclua teste funcional na manutenção preventiva."
     )
+
+
+def _minuscula_inicial(texto: str) -> str:
+    return texto[:1].lower() + texto[1:]
 
 
 def _fmt_dias(dias: float | None) -> str:
@@ -335,7 +340,7 @@ def decidir(
 def resumo_por_zona(decisoes: Sequence[DecisaoComponente]) -> dict[str, dict[str, Any]]:
     """Contagem e exposicao somada por zona."""
     resumo: dict[str, dict[str, Any]] = {}
-    for zona in (Zona.ESTOQUE_SEGURANCA, Zona.PONTO_PEDIDO, Zona.SOB_DEMANDA):
+    for zona in (Zona.PRIORIDADE_ALTA, Zona.PRIORIDADE_MEDIA, Zona.PRIORIDADE_BAIXA):
         itens = [d for d in decisoes if d.zona is zona]
         resumo[zona.rotulo] = {
             "componentes": len(itens),
@@ -380,7 +385,7 @@ def ordenar_para_relatorio(
     decisoes: Sequence[DecisaoComponente],
 ) -> list[DecisaoComponente]:
     """
-    Ordena por compromisso de estoque decrescente, depois pela exposicao anual
+    Ordena por prioridade decrescente, depois pela exposicao anual
     esperada, depois por Criticidade. Componentes sem zona vao para o fim.
     """
     return sorted(

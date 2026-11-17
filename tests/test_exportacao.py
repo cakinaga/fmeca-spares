@@ -44,6 +44,20 @@ def test_xlsx_tem_uma_linha_por_componente(fmeca_caso):
     assert ws.max_column == len(COLUNAS)
 
 
+def test_xlsx_traz_zona_de_prioridade_e_recomendacao(fmeca_caso):
+    decisoes = decidir(fmeca_caso, CUSTO, ZONAS, escala_ocorrencia=ESCALA)
+    dados = exportar_xlsx(fmeca_caso, decisoes, CUSTO, ZONAS, ESCALA)
+    ws = openpyxl.load_workbook(io.BytesIO(dados))["Decisão"]
+    titulos = [ws.cell(4, c).value for c in range(1, ws.max_column + 1)]
+    i_zona = titulos.index("Zona de prioridade") + 1
+    assert titulos[i_zona] == "Recomendação"
+    por_id = {ws.cell(5 + i, 1).value: 5 + i for i in range(len(decisoes))}
+    for d in decisoes:
+        linha = por_id[d.id]
+        assert ws.cell(linha, i_zona).value == d.zona.rotulo
+        assert ws.cell(linha, i_zona + 1).value == d.zona.recomendacao
+
+
 def test_xlsx_registra_os_parametros(fmeca_caso):
     decisoes = decidir(fmeca_caso, CUSTO, ZONAS, escala_ocorrencia=ESCALA)
     dados = exportar_xlsx(fmeca_caso, decisoes, CUSTO, ZONAS, ESCALA)
