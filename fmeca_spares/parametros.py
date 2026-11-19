@@ -33,7 +33,7 @@ def separar_limiares(baixo: int, alto: int, teto: int) -> tuple[int, int]:
 
 class Zona(str, Enum):
     """
-    Zonas de prioridade da Etapa 2.
+    Zonas de prioridade de estoque.
 
     A zona diz quantos dos dois eixos (Criticidade e lead time) sustentam a
     posse antecipada da peca: os dois (alta), apenas um (media) ou nenhum

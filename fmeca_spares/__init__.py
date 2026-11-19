@@ -1,9 +1,10 @@
 """
-fmeca_spares — modelo de decisao para estoque de spare parts na Engenharia Clinica.
+fmeca_spares — decisao de estoque de pecas de reposicao na Engenharia Clinica,
+baseada em FMECA e lead time.
 
-Implementa a Etapa 2 da estrutura metodologica: a decisao de estoque por
-componente, obtida do cruzamento entre a Criticidade do FMECA (S x O) e o lead
-time de fornecimento, com o Downtime Cost evitavel como grandeza de apoio. O
+A zona de prioridade de cada componente sai do cruzamento entre a Criticidade
+do FMECA (S x O) e o lead time de fornecimento, com o Downtime Cost evitavel
+como grandeza de apoio. O
 lead time vem da coluna "Lead time (dias)" da aba Matriz de componentes.
 
 O modulo nao depende de Streamlit nem de pandas: a interface grafica e apenas

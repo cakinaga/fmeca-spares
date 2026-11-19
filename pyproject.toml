@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "fmeca-spares"
 version = "0.4.0"
-description = "Modelo de priorização do estoque de spare parts na Engenharia Clínica, baseado em FMECA e lead time"
+description = "Aplicativo web para decisão de estoque de peças de reposição na Engenharia Clínica baseado em FMECA e lead time: estudo de caso em ventilador pulmonar"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { file = "LICENSE" }
@@ -14,7 +14,7 @@ keywords = [
     "engenharia clínica",
     "FMECA",
     "downtime cost",
-    "spare parts",
+    "peças de reposição",
     "gestão de estoque",
     "engenharia biomédica",
     "ventilador pulmonar",

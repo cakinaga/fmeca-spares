@@ -1,5 +1,5 @@
 """
-Modelo de decisao da Etapa 2: Criticidade do FMECA x lead time de fornecimento.
+Modelo de decisao: Criticidade do FMECA x lead time de fornecimento.
 
 A zona de prioridade de cada componente sai do cruzamento de dois eixos:
 

@@ -1,5 +1,6 @@
 """
-Interface do modelo de prioridade de estoque de spare parts (Etapa 2).
+Aplicativo web para decisao de estoque de pecas de reposicao na Engenharia
+Clinica, baseado em FMECA e lead time.
 
 Rodar com:
     streamlit run app.py
@@ -112,7 +113,7 @@ COR_EQUIPAMENTO = "#2e6da4"
 POSICOES_LAMBDA = {0.5: "Média da faixa", 1.0: "Teto da faixa"}
 
 st.set_page_config(
-    page_title="Estoque de spare parts — FMECA e lead time",
+    page_title="Estoque de peças de reposição — FMECA e lead time",
     page_icon="🔧",
     layout="wide",
 )
@@ -791,7 +792,7 @@ def _detalhe(decisoes) -> None:
 
 def main() -> None:
     st.html(CSS_BARRA_LATERAL)
-    st.title("Estoque de spare parts na Engenharia Clínica")
+    st.title("Decisão de estoque de peças de reposição na Engenharia Clínica")
     st.caption(
         "Prioridade de estoque de peças de reposição a partir do FMECA do "
         "equipamento: para cada componente, o cruzamento entre a Criticidade "
@@ -872,13 +873,13 @@ def main() -> None:
         "Planilha de resultado (.xlsx)",
         data=exportar_xlsx(fmeca, decisoes, custo, zonas, escala, validacao,
                            deteccao=deteccao),
-        file_name="decisao_estoque_spare_parts.xlsx",
+        file_name="decisao_estoque_pecas_reposicao.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
     col2.download_button(
         "Tabela de decisão (.csv)",
         data=exportar_csv(decisoes).encode("utf-8-sig"),
-        file_name="decisao_estoque_spare_parts.csv",
+        file_name="decisao_estoque_pecas_reposicao.csv",
         mime="text/csv",
     )
     st.caption(

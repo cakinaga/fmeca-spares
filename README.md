@@ -3,13 +3,15 @@
 **Interface online:** <https://fmeca-spares.streamlit.app> — abre no navegador,
 sem instalação, com o estudo de caso de demonstração carregado.
 
-Modelo de priorização do estoque de peças de reposição na Engenharia Clínica,
-baseado em FMECA e lead time. Implementa a **Etapa 2** da estrutura
-metodológica: a zona de prioridade de cada componente — alta, média ou
-baixa —, a partir do cruzamento entre a Criticidade do FMECA e o lead time de
-fornecimento, com a recomendação de estoque correspondente. O Downtime Cost
-quantifica a exposição anual à falta de cada peça e ordena os componentes
-dentro de cada zona, sem alterar a zona.
+**Aplicativo web para decisão de estoque de peças de reposição na Engenharia
+Clínica baseado em FMECA e lead time: estudo de caso em ventilador pulmonar.**
+
+O aplicativo atribui a cada componente do equipamento uma zona de prioridade
+de estoque — alta, média ou baixa —, a partir do cruzamento entre a
+Criticidade do FMECA e o lead time de fornecimento, com a recomendação de
+estoque correspondente. O Downtime Cost quantifica a exposição anual à falta
+de cada peça e ordena os componentes dentro de cada zona, sem alterar a zona.
+O estudo de caso é o FMECA de um ventilador pulmonar de UTI.
 
 O repositório tem duas partes independentes:
 
@@ -260,7 +262,8 @@ Um formulário em branco pode ser baixado na barra lateral da interface
 («Baixar formulário FMECA em branco»). Ele é gerado a partir do estudo de caso:
 mantém abas, cabeçalhos, formatação, as fórmulas de RPN e Criticidade e a aba
 «Tabela» com as escalas, sem a identificação do equipamento e sem os dados.
-Para mais linhas, insira-as dentro da tabela, para que as fórmulas acompanhem.
+Todas as linhas vêm visíveis e sem filtro aplicado. Para mais linhas,
+insira-as dentro da tabela, para que as fórmulas acompanhem.
 
 ### Lead time
 
@@ -311,8 +314,7 @@ forma, no sistema de gestão da manutenção e no setor de compras.
    acordar o que se conta como perda; na falta dele, a diária do SUS.
 
 Enquanto esses dados não existirem, o resultado demonstra o método e não
-constitui recomendação de compra. O app e as planilhas de demonstração dizem
-isso de forma explícita.
+constitui recomendação de compra.
 
 ---
 
