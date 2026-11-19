@@ -564,35 +564,11 @@ def _dispersao(decisoes, zonas: ParametrosZona, custo: ParametrosCusto) -> None:
         domain=[z.rotulo for z in (Zona.PRIORIDADE_ALTA, Zona.PRIORIDADE_MEDIA, Zona.PRIORIDADE_BAIXA)],
         range=[COR_ZONA[Zona.PRIORIDADE_ALTA], COR_ZONA[Zona.PRIORIDADE_MEDIA], COR_ZONA[Zona.PRIORIDADE_BAIXA]],
     )
-    # dominios fixos, para que o sombreado chegue a borda do grafico
+    # dominios fixos: Criticidade na escala inteira, lead time ate um pouco
+    # acima do maior prazo
     teto_y = math.ceil(max(df["LeadTime"].max(), zonas.lead_time_longo_dias) * 1.1 / 10) * 10
     eixo_x = alt.Scale(domain=[0, TETO_CRITICIDADE], nice=False)
     eixo_y = alt.Scale(domain=[0, teto_y], nice=False)
-
-    # celulas de prioridade alta: Alta x (Medio, Longo) e Media x Longo
-    regioes = pd.DataFrame(
-        {
-            "x": [zonas.criticidade_alta, zonas.criticidade_media],
-            "x2": [TETO_CRITICIDADE, zonas.criticidade_alta],
-            "y": [zonas.lead_time_curto_dias, zonas.lead_time_longo_dias],
-            "y2": [teto_y, teto_y],
-        }
-    )
-    sombreado = (
-        alt.Chart(regioes)
-        .mark_rect(color=COR_ZONA[Zona.PRIORIDADE_ALTA], opacity=0.08)
-        .encode(
-            x=alt.X("x:Q", scale=eixo_x), x2="x2:Q",
-            y=alt.Y("y:Q", scale=eixo_y), y2="y2:Q",
-        )
-    )
-    rotulo = (
-        alt.Chart(pd.DataFrame({"x": [TETO_CRITICIDADE], "y": [teto_y],
-                                "t": [Zona.PRIORIDADE_ALTA.rotulo.lower()]}))
-        .mark_text(align="right", baseline="top", dx=-4, dy=4, fontSize=11,
-                   color=COR_ZONA[Zona.PRIORIDADE_ALTA])
-        .encode(x=alt.X("x:Q", scale=eixo_x), y=alt.Y("y:Q", scale=eixo_y), text="t:N")
-    )
     pontos = (
         alt.Chart(df)
         .mark_circle(opacity=0.85, stroke="white", strokeWidth=1)
@@ -629,7 +605,7 @@ def _dispersao(decisoes, zonas: ParametrosZona, custo: ParametrosCusto) -> None:
         pd.DataFrame({"l": [zonas.lead_time_curto_dias, zonas.lead_time_longo_dias]})
     ).mark_rule(strokeDash=[4, 4], color="#999").encode(y=alt.Y("l:Q", scale=eixo_y))
 
-    grafico = (sombreado + corte_c + corte_l + pontos + rotulo).properties(
+    grafico = (corte_c + corte_l + pontos).properties(
         height=420, width="container"
     )
     st.altair_chart(grafico)
