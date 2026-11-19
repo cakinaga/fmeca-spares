@@ -144,7 +144,7 @@ def _aba_decisao(wb: Workbook, fmeca: FMECA, decisoes: Sequence[DecisaoComponent
     ws = wb.active
     ws.title = "Decisão"
 
-    t = ws.cell(1, 1, "Prioridade de estoque de spare parts — Etapa 2")
+    t = ws.cell(1, 1, "Decisão de estoque de peças de reposição — FMECA e lead time")
     t.font = Font(bold=True, size=13, color=AZUL)
     ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(COLUNAS))
 
@@ -340,9 +340,12 @@ def modelo_em_branco(origem: str | Path) -> bytes:
 
     Mantem abas, cabecalhos, formatacao, as formulas de RPN e Criticidade e a
     aba Tabela com as escalas. Apaga a identificacao do equipamento e os
-    valores digitados nas linhas de componentes e de modos de falha.
+    valores digitados nas linhas de componentes e de modos de falha. Reexibe
+    as linhas ocultas e limpa os criterios de filtro aplicados no original.
     """
     wb = openpyxl.load_workbook(origem)
+    for ws in wb.worksheets:
+        _reexibir_linhas(ws)
     for nome in (ABA_COMPONENTES, ABA_MODOS):
         if nome not in wb.sheetnames:
             continue
@@ -359,6 +362,14 @@ def modelo_em_branco(origem: str | Path) -> bytes:
     buffer = io.BytesIO()
     wb.save(buffer)
     return buffer.getvalue()
+
+
+def _reexibir_linhas(ws) -> None:
+    """Mostra todas as linhas e mantem o autofiltro sem criterio ativo."""
+    for dimensao in ws.row_dimensions.values():
+        dimensao.hidden = False
+    ws.auto_filter.filterColumn = []
+    ws.auto_filter.sortState = None
 
 
 def _limpar_identificacao(ws) -> None:

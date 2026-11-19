@@ -156,6 +156,33 @@ def test_modelo_em_branco_mantem_formulas_e_escala(fmeca_caso):
     assert rel.avisos == []
 
 
+def test_modelo_em_branco_reexibe_linhas_ocultas_por_filtro(tmp_path):
+    origem = openpyxl.Workbook()
+    ws = origem.active
+    ws.title = "Modos de falha"
+    for i in range(1, 11):
+        ws.append([f"linha {i}", i])
+    ws.auto_filter.ref = "A1:B10"
+    ws.auto_filter.add_filter_column(0, ["linha 1"])
+    for r in range(2, 11):
+        ws.row_dimensions[r].hidden = True
+    caminho = tmp_path / "filtrada.xlsx"
+    origem.save(caminho)
+
+    wb = openpyxl.load_workbook(io.BytesIO(modelo_em_branco(caminho)))
+    ws = wb["Modos de falha"]
+    assert not any(d.hidden for d in ws.row_dimensions.values())
+    assert ws.auto_filter.ref == "A1:B10"
+    assert ws.auto_filter.filterColumn == []
+
+
+def test_modelo_em_branco_do_caso_nao_tem_linhas_ocultas(fmeca_caso):
+    wb = _modelo(fmeca_caso)
+    for ws in wb.worksheets:
+        assert not any(d.hidden for d in ws.row_dimensions.values()), ws.title
+        assert ws.auto_filter.filterColumn == [], ws.title
+
+
 def test_csv_fecha_a_conta_da_exposicao_anual(fmeca_caso):
     """A planilha exportada tem de permitir refazer DC anual = DC por evento × λ × frota."""
     decisoes = decidir(fmeca_caso, CUSTO, ZONAS, escala_ocorrencia=ESCALA)
